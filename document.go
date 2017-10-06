@@ -23,81 +23,77 @@ func maxIndex(depth uint) uint {
 }
 
 // an immutable position in a document
-type position struct {
+type Position struct {
 	length uint8
 	// this "value" is interpreted as a list of 2 * "length" integers.
 	// integer 2k has (rootBits+k) bits and is an index;
 	// integer 2k+1 has 64 bits and is a "site identifier" (aka. author
 	// identifier).
-	// each paid forms an "identifier".
-	value *big.Int
+	// each pair forms an "identifier".
+	value big.Int
 }
 
-func newPosition() *position {
-	return &position{0, new(big.Int)}
-}
-
-func (pos *position) clone() *position {
-	out := new(position)
+// return a clone of "pos" that is idependently mutable.
+func (pos *Position) clone() *Position {
+	out := new(Position)
 	out.length = pos.length
-	out.value = new(big.Int).Set(pos.value)
+	out.value.Set(&pos.value)
 	return out
 }
 
-// Return a position of length at least "length", padded with zeros on the right
+// Modify a position to have length at least "length", padded with zeros on the right
 // as necessary.
-// The original position is returned if its length is already at least "length".
-func (pos *position) padTo(length uint8) *position {
+// Returns the position for convenience.
+func (pos *Position) padTo(length uint8) *Position {
 	if pos.length >= length {
 		return pos
 	}
 
-	out := pos.clone()
-
 	var shiftBy uint // = 0
-	for out.length < length {
+	for pos.length < length {
 		shiftBy += rootBits + uint(length) + uid.Bits
-		out.length++
+		pos.length++
 	}
-	out.value.Lsh(out.value, shiftBy)
-	return out
+	pos.value.Lsh(&pos.value, shiftBy)
+	return pos
 }
 
-// Return a position of length at most "length", removing trialing identifiers
+// Modify position to have length at most "length", removing trailing identifiers
 // as necessary.
-// The original position is returned if already "length" or shorter.
-func (pos *position) prefix(length uint8) *position {
+// No changes are made if already "length" or shorter.
+// Returns the position for convenience.
+func (pos *Position) prefix(length uint8) *Position {
 	if pos.length <= length {
 		return pos
 	}
 
-	out := pos.clone()
-
 	var shiftBy uint // = 0
-	for out.length > length {
-		shiftBy += rootBits + uint(out.length-1) + uid.Bits
-		out.length--
+	for pos.length > length {
+		shiftBy += rootBits + uint(pos.length-1) + uid.Bits
+		pos.length--
 	}
-	out.value.Rsh(out.value, shiftBy)
-	return out
-
+	pos.value.Rsh(&pos.value, shiftBy)
+	return pos
 }
 
 // ordering of positions = lexicographical order on the list of (identifier,
 // site) pairs.
 // implemented as integer comparison after padding.
-func (pos *position) isBefore(oth *position) bool {
-	pos = pos.padTo(oth.length)
-	oth = oth.padTo(pos.length)
-	return pos.value.Cmp(oth.value) < 0
+func (pos *Position) isBefore(oth *Position) bool {
+	if pos.length < oth.length {
+		pos = pos.clone().padTo(oth.length)
+	} else if pos.length > oth.length {
+		oth = oth.clone().padTo(pos.length)
+	}
+	return pos.value.Cmp(&oth.value) < 0
 }
 
-func (pos *position) equals(oth *position) bool {
-	return pos.value.Cmp(oth.value) == 0
+func (pos *Position) equals(oth *Position) bool {
+	return pos.length == oth.length && pos.value.Cmp(&oth.value) == 0
 }
 
 // add an identifier to an existing position and return the new position
-func (pos *position) add(index uint, site uid.Uid) (*position, error) {
+func (pos *Position) add(index uint, site uid.Uid) (*Position, error) {
 	if pos.length >= maxLength {
 		return nil, errors.New("max position length reached")
 	}
@@ -107,24 +103,23 @@ func (pos *position) add(index uint, site uid.Uid) (*position, error) {
 		return nil, errors.New("bad index value")
 	}
 
-	out := new(position)
+	out := new(Position)
 	out.length = pos.length + 1
-	out.value = new(big.Int)
-	out.value.Lsh(pos.value, indexBits)
-	out.value.Or(out.value, new(big.Int).SetUint64(uint64(index)))
-	out.value.Lsh(out.value, uid.Bits)
-	out.value.Or(out.value, site.ToBig())
+	out.value.Lsh(&pos.value, indexBits)
+	out.value.Or(&out.value, new(big.Int).SetUint64(uint64(index)))
+	out.value.Lsh(&out.value, uid.Bits)
+	out.value.Or(&out.value, site.ToBig())
 
 	return out, nil
 }
 
 type atom struct {
-	pos       *position // position identifier
+	pos       *Position // position identifier
 	data      string    // the actual text
 	tombstone bool      // whether the atom was flagged as deleted
 }
 
-func newAtom(p *position, d string) *atom {
+func newAtom(p *Position, d string) *atom {
 	out := new(atom)
 	out.pos = p
 	out.data = d
@@ -135,16 +130,16 @@ func newAtom(p *position, d string) *atom {
 // deleted, or listed.
 type Document interface {
 	// responding to events
-	Add(pos *position, data string)
-	Delete(pos *position)
+	Add(pos *Position, data string)
+	Delete(pos *Position)
 
 	// Iterate through document, calling "cb" for each (non-tombstoned) atom.
-	Each(cb func(number uint, pos *position, data string))
+	Each(cb func(number uint, pos *Position, data string))
 
 	// To permit edition: insert an atom with the "data" before atom at "pos".
 	// Return "false" as second argument if the input position is not part of
 	// the document or is the sentinel (head) position.
-	Insert(site uid.Uid, pos *position, data string) error
+	Insert(site uid.Uid, pos *Position, data string) error
 }
 
 // documents are mutable ordered lists of atoms
@@ -156,12 +151,12 @@ type document struct {
 // NewDocument returns a new document, with two unremovable atoms - "start" and
 // "stop" sentinel strings.
 func NewDocument() Document {
-	headPos, err := newPosition().add(0, 0)
+	headPos, err := new(Position).add(0, 0)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	tailPos, err := newPosition().add(maxIndex(0), 0)
+	tailPos, err := new(Position).add(maxIndex(0), 0)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -187,7 +182,7 @@ func (doc *document) addAtom(a *atom) error {
 	return nil
 }
 
-func (doc *document) Insert(site uid.Uid, pos *position, data string) error {
+func (doc *document) Insert(site uid.Uid, pos *Position, data string) error {
 	// locate the position in the atom array
 	idx := sort.Search(len(doc.atoms), func(k int) bool {
 		return pos.equals(doc.atoms[k].pos)
@@ -200,7 +195,7 @@ func (doc *document) Insert(site uid.Uid, pos *position, data string) error {
 	// TODO: generate position!
 	// left := doc.atoms[idx-1]
 	// right := doc.atoms[idx]
-	newPos := new(position)
+	newPos := new(Position)
 
 	// extend array and add new atom
 	head := doc.atoms[:idx]
@@ -213,15 +208,15 @@ func (doc *document) Insert(site uid.Uid, pos *position, data string) error {
 	return nil
 }
 
-func (doc *document) Add(pos *position, data string) {
+func (doc *document) Add(pos *Position, data string) {
 	return
 }
 
-func (doc *document) Delete(pos *position) {
+func (doc *document) Delete(pos *Position) {
 	return
 }
 
-func (doc *document) Each(cb func(number uint, pos *position, data string)) {
+func (doc *document) Each(cb func(number uint, pos *Position, data string)) {
 	var number uint // = 0
 	for _, a := range doc.atoms {
 		if a.tombstone {
