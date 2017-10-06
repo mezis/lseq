@@ -1,0 +1,109 @@
+package lseq
+
+import (
+	"github.com/juju/errors"
+	"github.com/mezis/lseq/uid"
+)
+
+type identifier struct {
+	index  uint
+	author uid.Uid
+}
+
+// partial order on identifiers
+func (a identifier) isBefore(b identifier) bool {
+	if a.index == b.index {
+		return a.author < b.author
+	} else {
+		return a.index < b.index
+	}
+}
+
+// number of bits used for the indexes at the root of the tree (depth zero)
+const rootBits = 5
+
+// the maximum index value at a given tree depth (ie. position length)
+func maxIndex(depth uint) uint {
+	return 1<<(depth+rootBits) - 1
+}
+
+// an immutable position in a document
+type position struct {
+	ids []identifier
+	// uint8 length
+	// big.Int value
+}
+
+// absolute partial ordering of positions
+func (a position) isBefore(b position) bool {
+	// naive implementation using identifiers;
+	// this could be achieved by comparing right-padded big-integers.
+	na := len(a.ids)
+	nb := len(b.ids)
+	for j := 0; j < nb; j++ {
+		if j >= na || a.ids[j].isBefore(b.ids[j]) {
+			return true
+		}
+	}
+	return false
+}
+
+// func (a position) equals(b position) bool {
+// 	if len(a.ids) != len(b.ids) {
+// 		return false
+// 	}
+
+// 	for j := 0; j < len(a.ids); j++ {
+// 		if a.ids[j] != b.ids[j] {
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
+
+func (self position) add(id identifier) position {
+	// TODO: assert that the identifier has at most N index bits set
+	out := position{}
+	n := len(self.ids)
+	out.ids = make([]identifier, n+1)
+	copy(self.ids[:], out.ids[:n])
+	out.ids[n] = id
+	return out
+}
+
+type line struct {
+	position         // position identifier
+	data      string // the actual text
+	number    uint   // the calculated line number
+	tombstone bool   // whether the line was flagged as deleted
+}
+
+func newLine(p position, d string) *line {
+	out := line{}
+	out.position = p
+	out.data = d
+	return &out
+}
+
+type Document interface{}
+
+// documents are mutable ordered lists of lines
+type document struct {
+	uid.Uid
+	lines []*line
+}
+
+func NewDocument() Document {
+	headPos := position{}.add(identifier{0, 0})
+	tailPos := position{}.add(identifier{maxIndex(0), 0})
+
+	doc := document{uid.New(), make([]*line, 0, 2)}
+	doc.addLine(newLine(headPos, ""))
+	doc.addLine(newLine(tailPos, ""))
+	return &doc
+}
+
+// Add the line in the sorted array, and re-numbers lines.
+func (*document) addLine(l *line) error {
+	return nil
+}
