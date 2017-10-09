@@ -3,7 +3,6 @@ package lseq
 import (
 	"math/big"
 
-	"github.com/juju/errors"
 	"github.com/mezis/lseq/uid"
 )
 
@@ -106,14 +105,14 @@ func (pos *Position) equals(oth *Position) bool {
 
 // Add an identifier (index and site identifier) to the position,
 // returning the new position
-func (pos *Position) Add(index uint, site uid.Uid) (*Position, error) {
+func (pos *Position) Add(index uint, site uid.Uid) *Position {
 	if pos.length >= maxLength {
-		return nil, errors.New("max position length reached")
+		return nil // max position length reached
 	}
 
 	indexBits := rootBits + uint(pos.length)
 	if index < 0 || index >= 1<<indexBits {
-		return nil, errors.New("bad index value")
+		return nil // bad index value"
 	}
 
 	out := new(Position)
@@ -123,21 +122,22 @@ func (pos *Position) Add(index uint, site uid.Uid) (*Position, error) {
 	out.value.Lsh(&out.value, uid.Bits)
 	out.value.Or(&out.value, site.ToBig())
 
-	return out, nil
+	return out
 }
 
 // Return the last (deepest) index value.
-func (pos *Position) lastIndex() uint64 {
-	mask := new(big.Int).SetUint64(uint64(maxIndexAtDepth(pos.length - 1)))
-	val := new(big.Int).Rsh(&pos.value, uid.Bits)
-	val.And(val, mask)
-	return val.Uint64()
-}
+// func (pos *Position) lastIndex() uint64 {
+// 	mask := new(big.Int).SetUint64(uint64(maxIndexAtDepth(pos.length - 1)))
+// 	val := new(big.Int).Rsh(&pos.value, uid.Bits)
+// 	val.And(val, mask)
+// 	return val.Uint64()
+// }
 
+// IndexAt -
 // Return the index value at "depth"
-func (pos *Position) IndexAt(depth uint8) uint {
+func (pos *Position) IndexAt(depth uint8) int {
 	if pos.length <= depth {
-		return uint(0)
+		return 0
 	}
 
 	shiftBy := uint(0)
@@ -149,15 +149,14 @@ func (pos *Position) IndexAt(depth uint8) uint {
 	mask := new(big.Int).SetUint64(uint64(maxIndexAtDepth(depth)))
 	val := new(big.Int).Rsh(&pos.value, shiftBy)
 	val.And(val, mask)
-	return uint(val.Uint64())
+	return int(val.Int64())
 }
 
 // Interval -
 // Return the distance, in number of free identifiers, between "pos" and "oth"
 // at the given depth.
-// It is expected that "pos" ≺ "oth".
-func (pos *Position) Interval(oth *Position, depth uint8) int64 {
-	iPos := pos.prefix(depth).lastIndex()
-	iOth := oth.prefix(depth).lastIndex()
-	return int64(iOth) - int64(iPos)
+// It is expected that "pos" ≺ "oth", and that both positions share a common
+// prefix of length "depth",
+func (pos *Position) Interval(oth *Position, depth uint8) int {
+	return int(pos.IndexAt(depth)) - int(oth.IndexAt(depth))
 }

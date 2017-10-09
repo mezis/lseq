@@ -45,14 +45,10 @@ type document struct {
 // NewDocument returns a new document, with two unremovable atoms - "start" and
 // "stop" sentinel strings.
 func NewDocument() Document {
-	headPos, err := new(Position).Add(0, 0)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	tailPos, err := new(Position).Add(maxIndexAtDepth(0), 0)
-	if err != nil {
-		panic(err.Error())
+	headPos := new(Position).Add(0, 0)
+	tailPos := new(Position).Add(maxIndexAtDepth(0), 0)
+	if headPos == nil || tailPos == nil {
+		panic("could not create positions")
 	}
 
 	doc := document{uid.New(), make([]*atom, 0, 2)}
