@@ -37,19 +37,19 @@ var _ = Describe("Position", func() {
 		p2 := makePosition(23, 42)
 
 		It("returns the added index", func() {
-			Expect(p1.IndexAt(0)).To(Equal(23))
-			Expect(p2.IndexAt(0)).To(Equal(23))
-			Expect(p2.IndexAt(1)).To(Equal(42))
+			Expect(p1.DigitAt(0)).To(Equal(23))
+			Expect(p2.DigitAt(0)).To(Equal(23))
+			Expect(p2.DigitAt(1)).To(Equal(42))
 		})
 
 		It("is zero for the zero position", func() {
-			Expect(p0.IndexAt(0)).To(Equal(0))
-			Expect(p0.IndexAt(1)).To(Equal(0))
+			Expect(p0.DigitAt(0)).To(Equal(0))
+			Expect(p0.DigitAt(1)).To(Equal(0))
 		})
 
 		It("it zero at higher depths", func() {
-			Expect(p1.IndexAt(1)).To(Equal(0))
-			Expect(p2.IndexAt(2)).To(Equal(0))
+			Expect(p1.DigitAt(1)).To(Equal(0))
+			Expect(p2.DigitAt(2)).To(Equal(0))
 		})
 	})
 
@@ -128,8 +128,8 @@ var _ = Describe("Position", func() {
 			pObs := Allocate(p1, p2, m, 0xDEADBEEF)
 
 			fmt.Printf("pObs = %#v\n", pObs)
-			Expect(pObs.IndexAt(1)).To(Equal(43))
-			Expect(pObs.IndexAt(2)).To(Equal(0))
+			Expect(pObs.DigitAt(1)).To(Equal(43))
+			Expect(pObs.DigitAt(2)).To(Equal(0))
 		})
 
 		It("adds a level between contiguous positions", func() {})

@@ -20,20 +20,21 @@ type Position struct {
 	value big.Int
 }
 
-// Number of bits used for the indexes at the root of the tree (depth zero)
+// Number of bits used for the first (most significant) digit, ie. the root of
+// the tree.
 const rootBits uint = 5
 
-// Maximum tree depth (ie. position length); results in 31-bit indexes at the
+// Maximum tree depth (ie. position length); results in 31-bit digits at the
 // deepest level.
-const maxLength = 26
+const maxDigits = 26
 
 // How many free identifiers to leave before or after the first allocation at a
 // new tree depth.
 const boundary = 10
 
-// The maximum index value at a given tree depth.
+// The maximum digit value at a given tree depth.
 // Note that is is also usable as a bitmask.
-func maxIndexAtDepth(depth uint8) uint {
+func maxDigitAtDepth(depth uint8) uint {
 	return 1<<uint(bitsAtDepth(depth)) - 1
 }
 
@@ -109,29 +110,29 @@ func (pos *Position) equals(oth *Position) bool {
 
 // Add an identifier (index and site identifier) to the position,
 // returning the new position
-func (pos *Position) Add(index uint, site uid.Uid) *Position {
-	if pos.length >= maxLength {
+func (pos *Position) Add(digit uint, site uid.Uid) *Position {
+	if pos.length >= maxDigits {
 		return nil // max position length reached
 	}
 
-	indexBits := rootBits + uint(pos.length)
-	if index < 0 || index >= 1<<indexBits {
+	digitBits := uint(bitsAtDepth(pos.length))
+	if digit < 0 || digit >= 1<<digitBits {
 		return nil // bad index value"
 	}
 
 	out := new(Position)
 	out.length = pos.length + 1
-	out.value.Lsh(&pos.value, indexBits)
-	out.value.Or(&out.value, new(big.Int).SetUint64(uint64(index)))
+	out.value.Lsh(&pos.value, digitBits)
+	out.value.Or(&out.value, new(big.Int).SetUint64(uint64(digit)))
 	out.value.Lsh(&out.value, uid.Bits)
 	out.value.Or(&out.value, site.ToBig())
 
 	return out
 }
 
-// IndexAt -
-// Return the index value at "depth"
-func (pos *Position) IndexAt(depth uint8) int {
+// DigitAt -
+// Return the value of the `depth`s most significant digit.
+func (pos *Position) DigitAt(depth uint8) int {
 	if pos.length <= depth {
 		return 0
 	}
@@ -142,7 +143,7 @@ func (pos *Position) IndexAt(depth uint8) int {
 	}
 	shiftBy += uid.Bits * uint(pos.length-depth)
 
-	mask := new(big.Int).SetUint64(uint64(maxIndexAtDepth(depth)))
+	mask := new(big.Int).SetUint64(uint64(maxDigitAtDepth(depth)))
 	val := new(big.Int).Rsh(&pos.value, shiftBy)
 	val.And(val, mask)
 	return int(val.Int64())
@@ -154,7 +155,7 @@ func (pos *Position) IndexAt(depth uint8) int {
 // It is expected that "pos" ≺ "oth", and that both positions share a common
 // prefix of length "depth",
 func (pos *Position) Interval(oth *Position, depth uint8) int {
-	return int(pos.IndexAt(depth)) - int(oth.IndexAt(depth))
+	return int(pos.DigitAt(depth)) - int(oth.DigitAt(depth))
 }
 
 // Allocate -
@@ -169,14 +170,14 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 	interval := 0
 	depth := uint8(0)
 
-	for depth = uint8(0); depth < maxLength; depth++ {
+	for depth = uint8(0); depth < maxDigits; depth++ {
 		interval = right.Interval(left, depth) - 1
 		fmt.Printf("interval(%d) = %d\n", depth, interval)
 		if interval >= 1 {
 			break
 		}
 	}
-	if debug && depth >= maxLength {
+	if debug && depth >= maxDigits {
 		panic("max depth reached")
 	}
 
@@ -193,10 +194,10 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 	switch s := getStrategy(m, depth); s {
 	case boundaryLoStrategy:
 		prefix = left.prefix(depth)
-		digit = left.IndexAt(depth) + delta
+		digit = left.DigitAt(depth) + delta
 	case boundaryHiStrategy:
 		prefix = right.prefix(depth)
-		digit = right.IndexAt(depth) - delta
+		digit = right.DigitAt(depth) - delta
 	default:
 		// print("go strategy %s", s)
 		panic(fmt.Sprintf("unknown strategy %#v", s))
@@ -207,7 +208,7 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 	// fmt.Printf("depth = %#v\n", depth)
 	// fmt.Printf("left index = %#v\n", left.IndexAt(depth))
 	// fmt.Printf("right index = %#v\n", right.IndexAt(depth))
-	if debug && (digit < 0 || digit > int(maxIndexAtDepth(depth))) {
+	if debug && (digit < 0 || digit > int(maxDigitAtDepth(depth))) {
 		panic("generated bad digit")
 	}
 
@@ -228,7 +229,7 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 func (pos *Position) GoString() string {
 	l := make([]string, pos.length)
 	for d := uint8(0); d < pos.length; d++ {
-		l[d] = fmt.Sprintf("%d", pos.IndexAt(d))
+		l[d] = fmt.Sprintf("%d", pos.DigitAt(d))
 	}
 	return fmt.Sprintf("<%s>", strings.Join(l, ", "))
 }

@@ -18,7 +18,7 @@ type Document struct {
 // "stop" sentinel strings.
 func NewDocument() *Document {
 	headPos := new(Position).Add(0, 0)
-	tailPos := new(Position).Add(maxIndexAtDepth(0), 0)
+	tailPos := new(Position).Add(maxDigitAtDepth(0), 0)
 	if headPos == nil || tailPos == nil {
 		panic("could not create positions")
 	}
