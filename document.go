@@ -50,7 +50,7 @@ func NewDocument() Document {
 		panic(err.Error())
 	}
 
-	tailPos, err := new(Position).Add(maxIndex(0), 0)
+	tailPos, err := new(Position).Add(maxIndexAtDepth(0), 0)
 	if err != nil {
 		panic(err.Error())
 	}

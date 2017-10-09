@@ -28,10 +28,15 @@ const maxLength = 26
 // How many free identifiers to leave before or after the
 const boundary = 10
 
-// The maximum index value at a given tree depth (ie. position length).
+// The maximum index value at a given tree depth.
 // Note that is is also usable as a bitmask.
-func maxIndex(depth uint8) uint {
-	return 1<<(uint(depth)+rootBits) - 1
+func maxIndexAtDepth(depth uint8) uint {
+	return 1<<uint(bitsAtDepth(depth)) - 1
+}
+
+// Number of bits for indices a the given tree depth.
+func bitsAtDepth(depth uint8) uint8 {
+	return uint8(rootBits) + depth
 }
 
 // Return a position of length at least "length", padded with zeros on the right
@@ -123,14 +128,33 @@ func (pos *Position) Add(index uint, site uid.Uid) (*Position, error) {
 
 // Return the last (deepest) index value.
 func (pos *Position) lastIndex() uint64 {
-	mask := new(big.Int).SetUint64(uint64(maxIndex(pos.length - 1)))
+	mask := new(big.Int).SetUint64(uint64(maxIndexAtDepth(pos.length - 1)))
 	val := new(big.Int).Rsh(&pos.value, uid.Bits)
 	val.And(val, mask)
 	return val.Uint64()
 }
 
+// Return the index value at "depth"
+func (pos *Position) IndexAt(depth uint8) uint {
+	if pos.length <= depth {
+		return uint(0)
+	}
+
+	shiftBy := uint(0)
+	for d := pos.length - 1; d > depth; d-- {
+		shiftBy += uint(bitsAtDepth(uint8(d)))
+	}
+	shiftBy += uid.Bits * uint(pos.length-depth)
+
+	mask := new(big.Int).SetUint64(uint64(maxIndexAtDepth(depth)))
+	val := new(big.Int).Rsh(&pos.value, shiftBy)
+	val.And(val, mask)
+	return uint(val.Uint64())
+}
+
 // Interval -
-// Return the distance, in number of free identifiers, between "pos" and "oth".
+// Return the distance, in number of free identifiers, between "pos" and "oth"
+// at the given depth.
 // It is expected that "pos" ≺ "oth".
 func (pos *Position) Interval(oth *Position, depth uint8) int64 {
 	iPos := pos.prefix(depth).lastIndex()
