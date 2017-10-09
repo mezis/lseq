@@ -1,7 +1,10 @@
 package lseq
 
 import (
+	"fmt"
 	"math/big"
+	"math/rand"
+	"strings"
 
 	"github.com/mezis/lseq/uid"
 )
@@ -24,7 +27,8 @@ const rootBits uint = 5
 // deepest level.
 const maxLength = 26
 
-// How many free identifiers to leave before or after the
+// How many free identifiers to leave before or after the first allocation at a
+// new tree depth.
 const boundary = 10
 
 // The maximum index value at a given tree depth.
@@ -42,7 +46,7 @@ func bitsAtDepth(depth uint8) uint8 {
 // as necessary.
 //
 // Return the receiver if its length is already "length" or more.
-func (pos *Position) padTo(length uint8) *Position {
+func (pos *Position) PadTo(length uint8) *Position {
 	if pos.length >= length {
 		return pos
 	}
@@ -56,7 +60,7 @@ func (pos *Position) padTo(length uint8) *Position {
 		out.length++
 	}
 	out.value.Lsh(&pos.value, shiftBy)
-	return pos
+	return out
 }
 
 // Return a position of length at most "length", removing trailing identifiers
@@ -77,7 +81,7 @@ func (pos *Position) trimTo(length uint8) *Position {
 		out.length--
 	}
 	out.value.Rsh(&pos.value, shiftBy)
-	return pos
+	return out
 }
 
 // Return a position of length exactly "length", padding or trimming as
@@ -85,7 +89,7 @@ func (pos *Position) trimTo(length uint8) *Position {
 //
 // Return the receiver if already the right length.
 func (pos *Position) prefix(length uint8) *Position {
-	return pos.trimTo(length).padTo(length)
+	return pos.trimTo(length).PadTo(length)
 }
 
 // IsBefore -
@@ -94,8 +98,8 @@ func (pos *Position) prefix(length uint8) *Position {
 // In practice, this is the lexicographical order on the list of (identifier,
 // site) pairs, implemented as integer comparison after padding.
 func (pos *Position) IsBefore(oth *Position) bool {
-	pos = pos.padTo(oth.length)
-	oth = oth.padTo(pos.length)
+	pos = pos.PadTo(oth.length)
+	oth = oth.PadTo(pos.length)
 	return pos.value.Cmp(&oth.value) < 0
 }
 
@@ -125,14 +129,6 @@ func (pos *Position) Add(index uint, site uid.Uid) *Position {
 	return out
 }
 
-// Return the last (deepest) index value.
-// func (pos *Position) lastIndex() uint64 {
-// 	mask := new(big.Int).SetUint64(uint64(maxIndexAtDepth(pos.length - 1)))
-// 	val := new(big.Int).Rsh(&pos.value, uid.Bits)
-// 	val.And(val, mask)
-// 	return val.Uint64()
-// }
-
 // IndexAt -
 // Return the index value at "depth"
 func (pos *Position) IndexAt(depth uint8) int {
@@ -159,4 +155,72 @@ func (pos *Position) IndexAt(depth uint8) int {
 // prefix of length "depth",
 func (pos *Position) Interval(oth *Position, depth uint8) int {
 	return int(pos.IndexAt(depth)) - int(oth.IndexAt(depth))
+}
+
+// Allocate -
+// Implementation of the core LSEQ algorithm. Return a new position between the
+// "left" and "right" ones.
+func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Position {
+	interval := 0
+	depth := uint8(0)
+
+	for depth = uint8(0); depth < maxLength; depth++ {
+		interval = right.Interval(left, depth) - 1
+		// fmt.Printf("interval(%d) = %d\n", depth, interval)
+		if interval >= 1 {
+			break
+		}
+	}
+	if debug && depth >= maxLength {
+		panic("max depth reached")
+	}
+
+	var step int
+	if boundary < interval {
+		step = boundary
+	} else {
+		step = interval
+	}
+	delta := rand.Intn(step) + 1
+
+	var prefix *Position
+	var digit int
+	switch s := getStrategy(m, depth); s {
+	case boundaryLoStrategy:
+		prefix = left.prefix(depth)
+		digit = left.IndexAt(depth) + delta
+	case boundaryHiStrategy:
+		prefix = right.prefix(depth)
+		digit = right.IndexAt(depth) - delta
+	default:
+		// print("go strategy %s", s)
+		panic("unknown strategy")
+	}
+
+	// fmt.Printf("prefix = %#v\n", prefix)
+	// fmt.Printf("digit = %#v\n", digit)
+	// fmt.Printf("depth = %#v\n", depth)
+	// fmt.Printf("left index = %#v\n", left.IndexAt(depth))
+	// fmt.Printf("right index = %#v\n", right.IndexAt(depth))
+	if debug && (digit < 0 || digit > int(maxIndexAtDepth(depth))) {
+		panic("generated bad digit")
+	}
+
+	out := prefix.Add(uint(digit), site)
+	if debug && !(left.IsBefore(out) && out.IsBefore(right)) {
+		fmt.Printf("left = %#v\n", left)
+		fmt.Printf("out = %#v\n", out)
+		fmt.Printf("right = %#v\n", right)
+		panic("allocated position not in order")
+	}
+
+	return out
+}
+
+func (pos *Position) GoString() string {
+	l := make([]string, pos.length)
+	for d := uint8(0); d < pos.length; d++ {
+		l[d] = fmt.Sprintf("%d", pos.IndexAt(d))
+	}
+	return fmt.Sprintf("<%s>", strings.Join(l, ", "))
 }

@@ -7,58 +7,30 @@ import (
 	"github.com/mezis/lseq/uid"
 )
 
-type atom struct {
-	pos       *Position // position identifier
-	data      string    // the actual text
-	tombstone bool      // whether the atom was flagged as deleted
-}
-
-func newAtom(p *Position, d string) *atom {
-	out := new(atom)
-	out.pos = p
-	out.data = d
-	return out
-}
-
-// Document models a mutable, ordered set of strings, which can be added or
-// deleted, or listed.
-type Document interface {
-	// responding to events
-	Add(pos *Position, data string)
-	Delete(pos *Position)
-
-	// Iterate through document, calling "cb" for each (non-tombstoned) atom.
-	Each(cb func(number uint, pos *Position, data string))
-
-	// To permit edition: insert an atom with the "data" before atom at "pos".
-	// Return "false" as second argument if the input position is not part of
-	// the document or is the sentinel (head) position.
-	Insert(site uid.Uid, pos *Position, data string) error
-}
-
 // documents are mutable ordered lists of atoms
-type document struct {
+type Document struct {
 	uid.Uid
-	atoms []*atom
+	atoms         []*atom     // the ordered sequence of atoms
+	allocStrategy StrategyMap // depth -> alloc strategy
 }
 
 // NewDocument returns a new document, with two unremovable atoms - "start" and
 // "stop" sentinel strings.
-func NewDocument() Document {
+func NewDocument() *Document {
 	headPos := new(Position).Add(0, 0)
 	tailPos := new(Position).Add(maxIndexAtDepth(0), 0)
 	if headPos == nil || tailPos == nil {
 		panic("could not create positions")
 	}
 
-	doc := document{uid.New(), make([]*atom, 0, 2)}
+	doc := Document{Uid: uid.New(), atoms: make([]*atom, 0, 2)}
 	doc.addAtom(newAtom(headPos, ""))
 	doc.addAtom(newAtom(tailPos, ""))
 	return &doc
 }
 
 // Add the atom in the sorted array
-func (doc *document) addAtom(a *atom) error {
+func (doc *Document) addAtom(a *atom) error {
 	// find where to insert atom
 	idx := sort.Search(len(doc.atoms), func(k int) bool {
 		return a.pos.IsBefore(doc.atoms[k].pos)
@@ -72,7 +44,7 @@ func (doc *document) addAtom(a *atom) error {
 	return nil
 }
 
-func (doc *document) Insert(site uid.Uid, pos *Position, data string) error {
+func (doc *Document) Insert(site uid.Uid, pos *Position, data string) error {
 	// locate the position in the atom array
 	idx := sort.Search(len(doc.atoms), func(k int) bool {
 		return pos.equals(doc.atoms[k].pos)
@@ -98,15 +70,7 @@ func (doc *document) Insert(site uid.Uid, pos *Position, data string) error {
 	return nil
 }
 
-func (doc *document) Add(pos *Position, data string) {
-	return
-}
-
-func (doc *document) Delete(pos *Position) {
-	return
-}
-
-func (doc *document) Each(cb func(number uint, pos *Position, data string)) {
+func (doc *Document) Each(cb func(number uint, pos *Position, data string)) {
 	var number uint // = 0
 	for _, a := range doc.atoms {
 		if a.tombstone {
