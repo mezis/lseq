@@ -145,10 +145,14 @@ var _ = Describe("Position", func() {
 			return out
 		}
 
-		PMeasure("runs quickly", func(b Benchmarker) {
+		XMeasure("runs quickly", func(b Benchmarker) {
 			p1 := genPosition()
 			p2 := genPosition()
 			m := make(StrategyMap)
+			if p2.IsBefore(p1) {
+				p1, p2 = p2, p1
+			}
+
 			b.Time("runtime", func() {
 				Allocate(p1, p2, m, 0xAA)
 			})

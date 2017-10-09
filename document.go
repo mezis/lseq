@@ -7,7 +7,7 @@ import (
 	"github.com/mezis/lseq/uid"
 )
 
-// documents are mutable ordered lists of atoms
+// Document - a mutable ordered lists of atoms (e.g lines, characters)
 type Document struct {
 	uid.Uid
 	atoms         []*atom     // the ordered sequence of atoms
@@ -44,6 +44,8 @@ func (doc *Document) addAtom(a *atom) error {
 	return nil
 }
 
+// Insert --
+// Add a new atom with "date" and "site" just before "pos".
 func (doc *Document) Insert(site uid.Uid, pos *Position, data string) error {
 	// locate the position in the atom array
 	idx := sort.Search(len(doc.atoms), func(k int) bool {
@@ -70,6 +72,8 @@ func (doc *Document) Insert(site uid.Uid, pos *Position, data string) error {
 	return nil
 }
 
+// Each --
+// Iterate through atoms, passing them to the "cb" callback.
 func (doc *Document) Each(cb func(number uint, pos *Position, data string)) {
 	var number uint // = 0
 	for _, a := range doc.atoms {

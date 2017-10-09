@@ -46,7 +46,7 @@ func bitsAtDepth(depth uint8) uint8 {
 // as necessary.
 //
 // Return the receiver if its length is already "length" or more.
-func (pos *Position) PadTo(length uint8) *Position {
+func (pos *Position) padTo(length uint8) *Position {
 	if pos.length >= length {
 		return pos
 	}
@@ -89,7 +89,7 @@ func (pos *Position) trimTo(length uint8) *Position {
 //
 // Return the receiver if already the right length.
 func (pos *Position) prefix(length uint8) *Position {
-	return pos.trimTo(length).PadTo(length)
+	return pos.trimTo(length).padTo(length)
 }
 
 // IsBefore -
@@ -98,8 +98,8 @@ func (pos *Position) prefix(length uint8) *Position {
 // In practice, this is the lexicographical order on the list of (identifier,
 // site) pairs, implemented as integer comparison after padding.
 func (pos *Position) IsBefore(oth *Position) bool {
-	pos = pos.PadTo(oth.length)
-	oth = oth.PadTo(pos.length)
+	pos = pos.padTo(oth.length)
+	oth = oth.padTo(pos.length)
 	return pos.value.Cmp(&oth.value) < 0
 }
 
@@ -161,12 +161,17 @@ func (pos *Position) Interval(oth *Position, depth uint8) int {
 // Implementation of the core LSEQ algorithm. Return a new position between the
 // "left" and "right" ones.
 func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Position {
+	fmt.Printf("Allocate(%#v, %#v)\n", left, right)
+	if debug && !left.IsBefore(right) {
+		panic("arguments not in order")
+	}
+
 	interval := 0
 	depth := uint8(0)
 
 	for depth = uint8(0); depth < maxLength; depth++ {
 		interval = right.Interval(left, depth) - 1
-		// fmt.Printf("interval(%d) = %d\n", depth, interval)
+		fmt.Printf("interval(%d) = %d\n", depth, interval)
 		if interval >= 1 {
 			break
 		}
@@ -194,7 +199,7 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 		digit = right.IndexAt(depth) - delta
 	default:
 		// print("go strategy %s", s)
-		panic("unknown strategy")
+		panic(fmt.Sprintf("unknown strategy %#v", s))
 	}
 
 	// fmt.Printf("prefix = %#v\n", prefix)
@@ -217,6 +222,9 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 	return out
 }
 
+// GoString --
+// Implement `fmt.GoStringer` so that the `%#v` placeholder works for `Position`
+// values.
 func (pos *Position) GoString() string {
 	l := make([]string, pos.length)
 	for d := uint8(0); d < pos.length; d++ {

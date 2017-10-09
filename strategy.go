@@ -19,7 +19,7 @@ const (
 func getStrategy(m StrategyMap, depth uint8) strategy {
 	s, ok := m[depth]
 	if !ok {
-		s = strategy(rand.Intn(int(stategyCount)) + 1)
+		s = strategy(rand.Intn(2) + 1)
 		m[depth] = s
 	}
 	return s
