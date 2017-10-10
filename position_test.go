@@ -1,10 +1,10 @@
 package lseq_test
 
 import (
-	"fmt"
 	"math/rand"
 
 	. "github.com/mezis/lseq"
+	"github.com/mezis/lseq/uid"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -50,6 +50,18 @@ var _ = Describe("Position", func() {
 		It("it zero at higher depths", func() {
 			Expect(p1.DigitAt(1)).To(Equal(0))
 			Expect(p2.DigitAt(2)).To(Equal(0))
+		})
+	})
+
+	Describe("SiteAt", func() {
+		p0 := new(Position)
+		p1 := p0.Add(1, 0xDEADBEEF)
+		p2 := p1.Add(2, 0xF00F00F0)
+		It("can return the 1st site", func() {
+			Expect(p2.SiteAt(0)).To(Equal(uid.Uid(0xDEADBEEF)))
+		})
+		It("can return the 2nd site", func() {
+			Expect(p2.SiteAt(1)).To(Equal(uid.Uid(0xF00F00F0)))
 		})
 	})
 
@@ -133,15 +145,15 @@ var _ = Describe("Position", func() {
 		})
 	})
 
-	XDescribe("Allocate", func() {
+	Describe("Allocate", func() {
 		It("inserts between non-contiguous positions of same length", func() {
 			p1 := makePosition(21, 42)
 			p2 := makePosition(21, 44)
 			m := make(StrategyMap)
 
-			pObs := Allocate(p1, p2, m, 0xDEADBEEF)
+			pObs := Allocate(p1, p2, m, 0xF00F00F0)
 
-			fmt.Printf("pObs = %#v\n", pObs)
+			// fmt.Printf("pObs = %#v\n", pObs)
 			Expect(pObs.DigitAt(1)).To(Equal(43))
 			Expect(pObs.DigitAt(2)).To(Equal(0))
 		})
@@ -159,7 +171,7 @@ var _ = Describe("Position", func() {
 			return out
 		}
 
-		Measure("runs quickly", func(b Benchmarker) {
+		XMeasure("runs quickly", func(b Benchmarker) {
 			p1 := genPosition()
 			p2 := genPosition()
 			m := make(StrategyMap)

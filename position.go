@@ -133,6 +133,15 @@ func (pos *Position) prefix(length uint8) *Position {
 	return pos.trimTo(length).padTo(length)
 }
 
+// Return a copy of the position
+func (pos *Position) clone() *Position {
+	out := new(Position)
+	out.length = pos.length
+	out.digits.Set(&pos.digits)
+	out.sites.Set(&pos.sites)
+	return out
+}
+
 // IsBefore -
 // Return true iff "pos" is before "oth" in the partial order defined by Logoot.
 //
@@ -169,7 +178,7 @@ func (pos *Position) Add(digit uint, site uid.Uid) *Position {
 	out.sites.Lsh(&pos.sites, digitBits)
 	out.sites.Or(&out.sites, new(big.Int).SetUint64(uint64(digit)))
 	out.sites.Lsh(&out.sites, uid.Bits)
-	out.sites.Or(&out.sites, site.ToBig())
+	out.sites.Or(&out.sites, site.ToBig(new(big.Int)))
 
 	return out
 }
@@ -204,29 +213,10 @@ func (pos *Position) SiteAt(depth uint8) uid.Uid {
 		shiftBy += uint(bitsAtDepth(uint8(d))) + uid.Bits
 	}
 
-	val := new(big.Int).Rsh(&pos.digits, shiftBy)
+	val := new(big.Int).Rsh(&pos.sites, shiftBy)
 
 	val.And(val, siteMask)
-	return uid.Uid(val.Uint64())
-}
-
-// Iterate through the digits of the receiver, `lt`, and `rt` positions,
-// and the site identifiers of the `lt` and `rt` positions.
-func (pos *Position) walk(lt *Position, rt *Position, cb func(depth int, digit *big.Int, dlt *big.Int, drt *big.Int, slt *big.Int, srt *big.Int)) {
-	if debug && (pos.length != lt.length || pos.length != rt.length) {
-		panic("positions have different lengths")
-	}
-
-	// digitsMd := new(big.Int).Set(&pos.digits)
-	// sitesLt := new(big.Int).Set(&lt.sites)
-	// sitesRt := new(big.Int).Set(&rt.sites)
-	// smask := siteMask()
-
-	// for d := pos.length - 1; d >= 0; d-- {
-	//   dmask := maxDigitAtDepth(d)
-	//   digit = digitsMd.And(
-
-	// }
+	return uid.New(val)
 }
 
 // Interval -
@@ -244,24 +234,63 @@ func (pos *Position) Interval(oth *Position) int {
 	return max(0, interval)
 }
 
+// Iterate through the digits of the receiver, `lt`, and `rt` positions,
+// and the site identifiers of the `lt` and `rt` positions.
+func (pos *Position) walk(lt *Position, rt *Position, cb func(depth uint8, digit uint64, dlt uint64, drt uint64, slt uid.Uid, srt uid.Uid)) {
+	if debug && (pos.length != lt.length || pos.length != rt.length) {
+		panic("positions have different lengths")
+	}
+
+	var digit, dlt, drt, slt, srt big.Int
+
+	digitsMd := new(big.Int).Set(&pos.digits)
+	sitesLt := new(big.Int).Set(&lt.sites)
+	sitesRt := new(big.Int).Set(&rt.sites)
+
+	// fmt.Printf("digitMask = (len %d) %#v\n", len(digitMask), digitMask)
+	for d := int(pos.length - 1); d >= 0; d-- {
+		slt.And(sitesLt, siteMask)
+		srt.And(sitesRt, siteMask)
+
+		sitesLt.Rsh(sitesLt, uid.Bits)
+		sitesRt.Rsh(sitesRt, uid.Bits)
+
+		// fmt.Println(d)
+		// fmt.Println(digitMask[d])
+		digit.And(digitsMd, digitMask[d])
+		dlt.And(sitesLt, digitMask[d])
+		drt.And(sitesRt, digitMask[d])
+
+		digitsMd.Rsh(digitsMd, uint(bitsAtDepth(uint8(d))))
+		sitesLt.Rsh(sitesLt, uint(bitsAtDepth(uint8(d))))
+		sitesRt.Rsh(sitesRt, uint(bitsAtDepth(uint8(d))))
+
+		cb(uint8(d), digit.Uint64(), dlt.Uint64(), drt.Uint64(), uid.Uid(slt.Uint64()), uid.Uid(srt.Uint64()))
+	}
+}
+
 // Allocate -
 // Implementation of the core LSEQ algorithm. Return a new position between the
 // "left" and "right" ones.
 func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Position {
-	fmt.Printf("Allocate(%#v, %#v)\n", left, right)
+	// fmt.Printf("Allocate(%#v, %#v)\n", left, right)
 	if debug && !left.IsBefore(right) {
 		panic("arguments not in order")
 	}
 
 	// find a depth and prefixes with a sufficient interval
+	// fmt.Printf("** finding prefixes\n")
 	var ltPrefix, rtPrefix *Position
 	var interval int
 	var depth uint8
 	for depth = 1; depth < maxDigits; depth++ {
+		// fmt.Printf("*** depth %d\n", depth)
 		ltPrefix = left.prefix(depth)
 		rtPrefix = right.prefix(depth)
-		interval = right.Interval(left)
-		fmt.Printf("interval(%d) = %d\n", depth, interval)
+		interval = rtPrefix.Interval(ltPrefix)
+		// fmt.Printf("  left  = %#v\n", ltPrefix)
+		// fmt.Printf("  right = %#v\n", rtPrefix)
+		// fmt.Printf("  interval(%d) = %d\n", depth, interval)
 		if interval >= 1 {
 			break
 		}
@@ -271,55 +300,53 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 	}
 
 	// calcultate digits for the new position
+	// fmt.Println("** calculate digits")
 	offset := rand.Intn(min(boundary, interval)) + 1
 
 	var out *Position
 	bigOffset := big.NewInt(int64(offset))
 	switch s := getStrategy(m, depth); s {
 	case boundaryLoStrategy:
-		out = ltPrefix
+		out = ltPrefix.clone()
 		out.digits.Add(&out.digits, bigOffset)
 	case boundaryHiStrategy:
-		out = rtPrefix
+		out = rtPrefix.clone()
 		out.digits.Sub(&out.digits, bigOffset)
 	default:
-		// print("go strategy %s", s)
 		panic(fmt.Sprintf("unknown strategy %#v", s))
 	}
 
 	// merge site identifiers
-	digits := make([]*big.Int, depth)
-	sites := make([]*big.Int, depth)
-	out.walk(ltPrefix, rtPrefix, func(depth int, digit *big.Int, dlt *big.Int, drt *big.Int, slt *big.Int, srt *big.Int) {
+	// fmt.Println("** interleave new indentifiers")
+	digits := make([]uint64, depth)
+	sites := make([]uid.Uid, depth)
+	out.walk(ltPrefix, rtPrefix, func(depth uint8, digit uint64, dlt uint64, drt uint64, slt uid.Uid, srt uid.Uid) {
 		digits[depth] = digit
 		if digit == dlt {
 			sites[depth] = slt
 		} else if digit == drt {
 			sites[depth] = srt
 		} else {
-			sites[depth] = site.ToBig()
+			sites[depth] = site
 		}
 	})
 
+	// fmt.Println("digits =", digits)
+	// fmt.Println("sites =", sites)
+
 	out.sites.SetInt64(0)
-	for d := uint8(0); d < out.length; d++ {
-		out.sites.Lsh(&out.sites, uint(bitsAtDepth(d)))
-		out.sites.Or(&out.sites, digits[d])
+	var d, s big.Int
+	for k := uint8(0); k < out.length; k++ {
+		d.SetUint64(digits[k])
+		sites[k].ToBig(&s)
+
+		out.sites.Lsh(&out.sites, uint(bitsAtDepth(k)))
+		out.sites.Or(&out.sites, &d)
 		out.sites.Lsh(&out.sites, uid.Bits)
-		out.sites.Or(&out.sites, sites[d])
+		out.sites.Or(&out.sites, &s)
 	}
 
-	// fmt.Printf("prefix = %#v\n", prefix)
-	// fmt.Printf("digit = %#v\n", digit)
-	// fmt.Printf("depth = %#v\n", depth)
-	// fmt.Printf("left index = %#v\n", left.IndexAt(depth))
-	// fmt.Printf("right index = %#v\n", right.IndexAt(depth))
-	// if debug && (digit < 0 || digit > int(maxDigitAtDepth(depth))) {
-	// 	panic("generated bad digit")
-	// }
-
-	// out := prefix.Add(uint(digit), site)
-
+	// check and return
 	if debug && !(left.IsBefore(out) && out.IsBefore(right)) {
 		fmt.Printf("left = %#v\n", left)
 		fmt.Printf("out = %#v\n", out)
@@ -336,7 +363,7 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 func (pos *Position) GoString() string {
 	l := make([]string, pos.length)
 	for d := uint8(0); d < pos.length; d++ {
-		l[d] = fmt.Sprintf("%d", pos.DigitAt(d))
+		l[d] = fmt.Sprintf("%d %#v", pos.DigitAt(d), pos.SiteAt(d))
 	}
 	return fmt.Sprintf("<%s>", strings.Join(l, ", "))
 }

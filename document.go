@@ -23,7 +23,7 @@ func NewDocument() *Document {
 		panic("could not create positions")
 	}
 
-	doc := Document{Uid: uid.New(), atoms: make([]*atom, 0, 2)}
+	doc := Document{Uid: uid.Generate(), atoms: make([]*atom, 0, 2)}
 	doc.addAtom(newAtom(headPos, ""))
 	doc.addAtom(newAtom(tailPos, ""))
 	return &doc
