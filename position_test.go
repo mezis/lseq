@@ -154,13 +154,23 @@ var _ = Describe("Position", func() {
 			pObs := Allocate(p1, p2, m, 0xF00F00F0)
 
 			// fmt.Printf("pObs = %#v\n", pObs)
-			Expect(pObs.DigitAt(1)).To(Equal(43))
-			Expect(pObs.DigitAt(2)).To(Equal(0))
+			// Expect(pObs.DigitAt(1)).To(Equal(43))
+			// Expect(pObs.DigitAt(2)).To(Equal(0))
+			Expect(pObs.String()).To(Equal("<21 @DEADBEEF, 43 @F00F00F0>"))
 		})
 
-		It("adds a level between contiguous positions", func() {})
+		It("adds a level between contiguous positions", func() {
+			p1 := makePosition(16, 30)
+			p2 := makePosition(16, 31)
+			m := make(StrategyMap)
 
-		It("sets the trailing site ID to the argument value", func() {})
+			pObs := Allocate(p1, p2, m, 0xF00F00F0)
+
+			// fmt.Printf("pObs = %#v\n", pObs)
+			Expect(pObs.DigitAt(0)).To(Equal(16))
+			Expect(pObs.DigitAt(1)).To(Equal(30))
+			Expect(pObs.Length()).To(Equal(3))
+		})
 
 		genPosition := func() *Position {
 			out := new(Position)
@@ -171,7 +181,7 @@ var _ = Describe("Position", func() {
 			return out
 		}
 
-		XMeasure("runs quickly", func(b Benchmarker) {
+		Measure("runs quickly", func(b Benchmarker) {
 			p1 := genPosition()
 			p2 := genPosition()
 			m := make(StrategyMap)
@@ -180,9 +190,9 @@ var _ = Describe("Position", func() {
 			}
 
 			b.Time("runtime", func() {
-				Allocate(p1, p2, m, 0xAA)
+				Allocate(p1, p2, m, 0xF00F00F0)
 			})
-		}, 1000)
+		}, 10000)
 
 	})
 })

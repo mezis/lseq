@@ -183,6 +183,12 @@ func (pos *Position) Add(digit uint, site uid.Uid) *Position {
 	return out
 }
 
+// Length --
+// Return the number of digits in this position.
+func (pos *Position) Length() int {
+	return int(pos.length)
+}
+
 // DigitAt -
 // Return the value of the `depth`s most significant digit.
 func (pos *Position) DigitAt(depth uint8) int {
@@ -357,13 +363,17 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 	return out
 }
 
-// GoString --
-// Implement `fmt.GoStringer` so that the `%#v` placeholder works for `Position`
+// String --
+// Implement `fmt.Stringer` so that the `%#v` placeholder works for `Position`
 // values.
-func (pos *Position) GoString() string {
+func (pos *Position) String() string {
 	l := make([]string, pos.length)
 	for d := uint8(0); d < pos.length; d++ {
 		l[d] = fmt.Sprintf("%d %#v", pos.DigitAt(d), pos.SiteAt(d))
 	}
 	return fmt.Sprintf("<%s>", strings.Join(l, ", "))
+}
+
+func (pos *Position) GoString() string {
+	return pos.String()
 }
