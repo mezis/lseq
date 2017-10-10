@@ -4,6 +4,8 @@ import "math/rand"
 
 type strategy uint8
 
+// StrategyMap -
+// Which strategy was picked at a given digit depth.
 type StrategyMap map[uint8]strategy
 
 const (

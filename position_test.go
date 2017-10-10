@@ -57,20 +57,34 @@ var _ = Describe("Position", func() {
 		It("is zero beetween empty positions", func() {
 			p1 := new(Position)
 			p2 := new(Position)
-			Expect(p1.Interval(p2, 1)).To(Equal(0))
+			Expect(p1.Interval(p2)).To(Equal(0))
 		})
 
-		It("is the latter index with a longer position", func() {
-			p0 := makePosition(23)
+		It("is 1 between <21> and <23>", func() {
+			p0 := makePosition(21)
+			p1 := makePosition(23)
+			Expect(p1.Interval(p0)).To(Equal(1))
+		})
+
+		It("is 30 between <23,11> and <23,42>", func() {
+			p0 := makePosition(23, 11)
 			p1 := makePosition(23, 42)
-			Expect(p1.Interval(p0, 1)).To(Equal(42))
+			Expect(p1.Interval(p0)).To(Equal(30))
 		})
 
-		It("is the index difference at a given depth", func() {
+		It("is 0 between <21,63> and <22,0>", func() {
+			p0 := makePosition(21, 63)
+			p1 := makePosition(22, 0)
+			Expect(p1.Interval(p0)).To(Equal(0))
+		})
+
+		It("is 148 between <21,21> and <23,42>", func() {
 			p0 := makePosition(21, 21)
 			p1 := makePosition(23, 42)
-			Expect(p1.Interval(p0, 0)).To(Equal(2))
-			Expect(p1.Interval(p0, 1)).To(Equal(21))
+			// 21,21 -> 21,63 = 41
+			// 22,0  -> 22,63 = 64
+			// 23,0  -> 23,42 = 43
+			Expect(p1.Interval(p0)).To(Equal(148))
 		})
 	})
 
@@ -119,7 +133,7 @@ var _ = Describe("Position", func() {
 		})
 	})
 
-	Describe("Allocate", func() {
+	XDescribe("Allocate", func() {
 		It("inserts between non-contiguous positions of same length", func() {
 			p1 := makePosition(21, 42)
 			p2 := makePosition(21, 44)
@@ -134,7 +148,7 @@ var _ = Describe("Position", func() {
 
 		It("adds a level between contiguous positions", func() {})
 
-		It("", func() {})
+		It("sets the trailing site ID to the argument value", func() {})
 
 		genPosition := func() *Position {
 			out := new(Position)
@@ -145,7 +159,7 @@ var _ = Describe("Position", func() {
 			return out
 		}
 
-		XMeasure("runs quickly", func(b Benchmarker) {
+		Measure("runs quickly", func(b Benchmarker) {
 			p1 := genPosition()
 			p2 := genPosition()
 			m := make(StrategyMap)

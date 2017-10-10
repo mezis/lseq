@@ -11,13 +11,17 @@ import (
 
 // Position - An immutable position in a document
 type Position struct {
+	// A variable-base number; the first digit is the `rootBits` most
+	// significant bits of `value`; the second digit is the next
+	// `rootBits+1` bits, etc.
+	digits big.Int
+
+	// The number of variable-base digits in `value`
 	length uint8
-	// this "value" is interpreted as a list of 2 * "length" integers.
-	// integer 2k has (rootBits+k) bits and is an index;
-	// integer 2k+1 has 64 bits and is a "site identifier" (aka. author
-	// identifier).
-	// each pair forms an "identifier".
-	value big.Int
+
+	// Same as `value`, but interleaved with site identifiers (`uid.Uid`).
+	// This allows for fully ordered comparison between positions.
+	sites big.Int
 }
 
 // Number of bits used for the first (most significant) digit, ie. the root of
@@ -43,24 +47,61 @@ func bitsAtDepth(depth uint8) uint8 {
 	return uint8(rootBits) + depth
 }
 
+// Precalculated 64-bit mask
+var siteMask = func() *big.Int {
+	one := big.NewInt(1)
+	two64 := new(big.Int).Lsh(one, uid.Bits)
+	mask := new(big.Int).Sub(two64, one)
+	return mask
+}()
+
+// Precalculated masks for digits with variable bases
+var digitMask = func() []*big.Int {
+	out := make([]*big.Int, maxDigits)
+	for d := uint8(0); d < maxDigits; d++ {
+		out[d] = big.NewInt(int64(maxDigitAtDepth(d)))
+	}
+	return out
+}()
+
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+func max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
 // Return a position of length at least "length", padded with zeros on the right
 // as necessary.
+// The site identifier of extra digits is set to "site"
 //
 // Return the receiver if its length is already "length" or more.
-func (pos *Position) padTo(length uint8) *Position {
+func (pos *Position) padTo(length uint8, site uid.Uid) *Position {
 	if pos.length >= length {
 		return pos
 	}
 
 	out := new(Position)
 	out.length = pos.length
+	out.sites.Set(&pos.sites)
+	siteBig := site.ToBig()
 
-	var shiftBy uint // = 0
+	var shiftDigitsBy uint // = 0
 	for out.length < length {
-		shiftBy += rootBits + uint(out.length) + uid.Bits
+		digitBits := uint(bitsAtDepth(out.length))
+		shiftDigitsBy += digitBits
+
+		out.sites.Lsh(&out.sites, digitBits+uid.Bits)
+		out.sites.Or(&out.sites, siteBig)
 		out.length++
 	}
-	out.value.Lsh(&pos.value, shiftBy)
+	out.digits.Lsh(&pos.digits, shiftDigitsBy)
 	return out
 }
 
@@ -76,12 +117,14 @@ func (pos *Position) trimTo(length uint8) *Position {
 	out := new(Position)
 	out.length = pos.length
 
-	var shiftBy uint // = 0
+	var shiftDigitsBy, shiftSitesBy uint // = 0
 	for out.length > length {
-		shiftBy += rootBits + uint(out.length-1) + uid.Bits
+		shiftDigitsBy += rootBits + uint(out.length-1)
+		shiftSitesBy += rootBits + uint(out.length-1) + uid.Bits
 		out.length--
 	}
-	out.value.Rsh(&pos.value, shiftBy)
+	out.digits.Rsh(&pos.digits, shiftDigitsBy)
+	out.sites.Rsh(&pos.sites, shiftSitesBy)
 	return out
 }
 
@@ -89,8 +132,8 @@ func (pos *Position) trimTo(length uint8) *Position {
 // appropriate.
 //
 // Return the receiver if already the right length.
-func (pos *Position) prefix(length uint8) *Position {
-	return pos.trimTo(length).padTo(length)
+func (pos *Position) prefix(length uint8, site uid.Uid) *Position {
+	return pos.trimTo(length).padTo(length, site)
 }
 
 // IsBefore -
@@ -99,13 +142,13 @@ func (pos *Position) prefix(length uint8) *Position {
 // In practice, this is the lexicographical order on the list of (identifier,
 // site) pairs, implemented as integer comparison after padding.
 func (pos *Position) IsBefore(oth *Position) bool {
-	pos = pos.padTo(oth.length)
-	oth = oth.padTo(pos.length)
-	return pos.value.Cmp(&oth.value) < 0
+	pos = pos.padTo(oth.length, 0x00)
+	oth = oth.padTo(pos.length, 0x00)
+	return pos.sites.Cmp(&oth.sites) < 0
 }
 
 func (pos *Position) equals(oth *Position) bool {
-	return pos.length == oth.length && pos.value.Cmp(&oth.value) == 0
+	return pos.length == oth.length && pos.sites.Cmp(&oth.sites) == 0
 }
 
 // Add an identifier (index and site identifier) to the position,
@@ -122,10 +165,14 @@ func (pos *Position) Add(digit uint, site uid.Uid) *Position {
 
 	out := new(Position)
 	out.length = pos.length + 1
-	out.value.Lsh(&pos.value, digitBits)
-	out.value.Or(&out.value, new(big.Int).SetUint64(uint64(digit)))
-	out.value.Lsh(&out.value, uid.Bits)
-	out.value.Or(&out.value, site.ToBig())
+
+	out.digits.Lsh(&pos.digits, digitBits)
+	out.digits.Or(&out.digits, new(big.Int).SetUint64(uint64(digit)))
+
+	out.sites.Lsh(&pos.sites, digitBits)
+	out.sites.Or(&out.sites, new(big.Int).SetUint64(uint64(digit)))
+	out.sites.Lsh(&out.sites, uid.Bits)
+	out.sites.Or(&out.sites, site.ToBig())
 
 	return out
 }
@@ -141,21 +188,63 @@ func (pos *Position) DigitAt(depth uint8) int {
 	for d := pos.length - 1; d > depth; d-- {
 		shiftBy += uint(bitsAtDepth(uint8(d)))
 	}
-	shiftBy += uid.Bits * uint(pos.length-depth)
 
-	mask := new(big.Int).SetUint64(uint64(maxDigitAtDepth(depth)))
-	val := new(big.Int).Rsh(&pos.value, shiftBy)
-	val.And(val, mask)
+	val := new(big.Int).Rsh(&pos.digits, shiftBy)
+	val.And(val, digitMask[depth])
 	return int(val.Int64())
+}
+
+// SiteAt -
+// Return the value of the site identifier for the `depth`'s most significant
+// digit.
+func (pos *Position) SiteAt(depth uint8) uid.Uid {
+	if pos.length <= depth {
+		return 0
+	}
+
+	shiftBy := uint(0)
+	for d := pos.length - 1; d > depth; d-- {
+		shiftBy += uint(bitsAtDepth(uint8(d))) + uid.Bits
+	}
+
+	val := new(big.Int).Rsh(&pos.digits, shiftBy)
+
+	val.And(val, siteMask)
+	return uid.Uid(val.Uint64())
+}
+
+// Iterate through the digits of the receiver, `lt`, and `rt` positions,
+// and the site identifiers of the `lt` and `rt` positions.
+func (pos *Position) walk(lt *Position, rt *Position, cb func(depth int, digit *big.Int, dlt *big.Int, drt *big.Int, slt *big.Int, srt *big.Int)) {
+	if debug && (pos.length != lt.length || pos.length != rt.length) {
+		panic("positions have different lengths")
+	}
+
+	// digitsMd := new(big.Int).Set(&pos.digits)
+	// sitesLt := new(big.Int).Set(&lt.sites)
+	// sitesRt := new(big.Int).Set(&rt.sites)
+	// smask := siteMask()
+
+	// for d := pos.length - 1; d >= 0; d-- {
+	//   dmask := maxDigitAtDepth(d)
+	//   digit = digitsMd.And(
+
+	// }
 }
 
 // Interval -
 // Return the distance, in number of free identifiers, between "pos" and "oth"
-// at the given depth.
-// It is expected that "pos" ≺ "oth", and that both positions share a common
-// prefix of length "depth",
-func (pos *Position) Interval(oth *Position, depth uint8) int {
-	return int(pos.DigitAt(depth)) - int(oth.DigitAt(depth))
+func (pos *Position) Interval(oth *Position) int {
+	if debug && pos.length != oth.length {
+		panic("positions have different lengths")
+	}
+	delta := new(big.Int).Sub(&pos.digits, &oth.digits)
+	if debug && !delta.IsInt64() {
+		panic(fmt.Sprintf("interval from %#v to %#v is out of bounds", oth, pos))
+	}
+	interval := int(delta.Int64()) - 1
+
+	return max(0, interval)
 }
 
 // Allocate -
@@ -167,11 +256,14 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 		panic("arguments not in order")
 	}
 
-	interval := 0
-	depth := uint8(0)
-
-	for depth = uint8(0); depth < maxDigits; depth++ {
-		interval = right.Interval(left, depth) - 1
+	// find a depth and prefixes with a sufficient interval
+	var ltPrefix, rtPrefix *Position
+	var interval int
+	var depth uint8
+	for depth = 1; depth < maxDigits; depth++ {
+		ltPrefix = left.prefix(depth, site)
+		rtPrefix = right.prefix(depth, site)
+		interval = right.Interval(left)
 		fmt.Printf("interval(%d) = %d\n", depth, interval)
 		if interval >= 1 {
 			break
@@ -181,26 +273,43 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 		panic("max depth reached")
 	}
 
-	var step int
-	if boundary < interval {
-		step = boundary
-	} else {
-		step = interval
-	}
-	delta := rand.Intn(step) + 1
+	// calcultate digits for the new position
+	offset := rand.Intn(min(boundary, interval)) + 1
 
-	var prefix *Position
-	var digit int
+	var out *Position
+	bigOffset := big.NewInt(int64(offset))
 	switch s := getStrategy(m, depth); s {
 	case boundaryLoStrategy:
-		prefix = left.prefix(depth)
-		digit = left.DigitAt(depth) + delta
+		out = ltPrefix
+		out.digits.Add(&out.digits, bigOffset)
 	case boundaryHiStrategy:
-		prefix = right.prefix(depth)
-		digit = right.DigitAt(depth) - delta
+		out = rtPrefix
+		out.digits.Sub(&out.digits, bigOffset)
 	default:
 		// print("go strategy %s", s)
 		panic(fmt.Sprintf("unknown strategy %#v", s))
+	}
+
+	// merge site identifiers
+	digits := make([]*big.Int, depth)
+	sites := make([]*big.Int, depth)
+	out.walk(ltPrefix, rtPrefix, func(depth int, digit *big.Int, dlt *big.Int, drt *big.Int, slt *big.Int, srt *big.Int) {
+		digits[depth] = digit
+		if digit == dlt {
+			sites[depth] = slt
+		} else if digit == drt {
+			sites[depth] = srt
+		} else {
+			sites[depth] = site.ToBig()
+		}
+	})
+
+	out.sites.SetInt64(0)
+	for d := uint8(0); d < out.length; d++ {
+		out.sites.Lsh(&out.sites, uint(bitsAtDepth(d)))
+		out.sites.Or(&out.sites, digits[d])
+		out.sites.Lsh(&out.sites, uid.Bits)
+		out.sites.Or(&out.sites, sites[d])
 	}
 
 	// fmt.Printf("prefix = %#v\n", prefix)
@@ -208,11 +317,12 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 	// fmt.Printf("depth = %#v\n", depth)
 	// fmt.Printf("left index = %#v\n", left.IndexAt(depth))
 	// fmt.Printf("right index = %#v\n", right.IndexAt(depth))
-	if debug && (digit < 0 || digit > int(maxDigitAtDepth(depth))) {
-		panic("generated bad digit")
-	}
+	// if debug && (digit < 0 || digit > int(maxDigitAtDepth(depth))) {
+	// 	panic("generated bad digit")
+	// }
 
-	out := prefix.Add(uint(digit), site)
+	// out := prefix.Add(uint(digit), site)
+
 	if debug && !(left.IsBefore(out) && out.IsBefore(right)) {
 		fmt.Printf("left = %#v\n", left)
 		fmt.Printf("out = %#v\n", out)
