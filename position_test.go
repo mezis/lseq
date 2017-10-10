@@ -1,6 +1,7 @@
 package lseq_test
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -184,46 +185,58 @@ func genPosition(length uint) *Position {
 	return out
 }
 
+var bmLengths = []uint{1, 3, 5, 7}
+
 var pos *Position
 
-func benchmarkAllocate(length uint, b *testing.B) {
-	m := make(StrategyMap)
-	l := make([]*Position, b.N*2)
-	for k := 0; k < b.N; k++ {
-		p1 := genPosition(length)
-		p2 := genPosition(length)
-		if !p1.IsBefore(p2) {
-			p1, p2 = p2, p1
-		}
-		if !p1.IsBefore(p2) {
-			// we swapped but still not ordered - the positions are equal.
-			// roll dice again.
-			k--
-			continue
-		}
-		l[2*k] = p1
-		l[2*k+1] = p2
-	}
+func BenchmarkAllocate(b *testing.B) {
+	for _, n := range bmLengths {
+		b.Run(fmt.Sprintf("length=%d", n), func(b *testing.B) {
+			m := make(StrategyMap)
+			l := make([]*Position, b.N*2)
+			for k := 0; k < b.N; k++ {
+				p1 := genPosition(n)
+				p2 := genPosition(n)
+				if !p1.IsBefore(p2) {
+					p1, p2 = p2, p1
+				}
+				if !p1.IsBefore(p2) {
+					// we swapped but still not ordered - the positions are equal.
+					// roll dice again.
+					k--
+					continue
+				}
+				l[2*k] = p1
+				l[2*k+1] = p2
+			}
 
-	b.ResetTimer()
-	b.ReportAllocs()
-	for k := 0; k < b.N; k++ {
-		pos = Allocate(l[2*k], l[2*k+1], m, 0xF00F00F0)
+			b.ResetTimer()
+			b.ReportAllocs()
+			for k := 0; k < b.N; k++ {
+				pos = Allocate(l[2*k], l[2*k+1], m, 0xF00F00F0)
+			}
+		})
 	}
 }
 
-func BenchmarkAllocate1(b *testing.B) {
-	benchmarkAllocate(1, b)
-}
-func BenchmarkAllocate2(b *testing.B) {
-	benchmarkAllocate(2, b)
-}
-func BenchmarkAllocate3(b *testing.B) {
-	benchmarkAllocate(3, b)
-}
-func BenchmarkAllocate4(b *testing.B) {
-	benchmarkAllocate(4, b)
-}
-func BenchmarkAllocate5(b *testing.B) {
-	benchmarkAllocate(5, b)
+var res bool
+
+func BenchmarkIsBefore(b *testing.B) {
+	for _, n := range bmLengths {
+		b.Run(fmt.Sprintf("length=%d", n), func(b *testing.B) {
+			l := make([]*Position, b.N*2)
+			for k := 0; k < b.N; k++ {
+				p1 := genPosition(n)
+				p2 := genPosition(n)
+				l[2*k] = p1
+				l[2*k+1] = p2
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for k := 0; k < b.N; k++ {
+				res = l[2*k].IsBefore(l[2*k+1])
+			}
+		})
+	}
 }
