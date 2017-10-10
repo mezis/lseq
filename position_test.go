@@ -2,6 +2,7 @@ package lseq_test
 
 import (
 	"math/rand"
+	"testing"
 
 	. "github.com/mezis/lseq"
 	"github.com/mezis/lseq/uid"
@@ -171,28 +172,58 @@ var _ = Describe("Position", func() {
 			Expect(pObs.DigitAt(1)).To(Equal(30))
 			Expect(pObs.Length()).To(Equal(3))
 		})
-
-		genPosition := func() *Position {
-			out := new(Position)
-			for d := uint(0); d < 3; d++ {
-				digit := rand.Intn(1<<(d+5) - 1)
-				out = out.Add(uint(digit), 0xFF)
-			}
-			return out
-		}
-
-		Measure("runs quickly", func(b Benchmarker) {
-			p1 := genPosition()
-			p2 := genPosition()
-			m := make(StrategyMap)
-			if p2.IsBefore(p1) {
-				p1, p2 = p2, p1
-			}
-
-			b.Time("runtime", func() {
-				Allocate(p1, p2, m, 0xF00F00F0)
-			})
-		}, 10000)
-
 	})
 })
+
+func genPosition(length uint) *Position {
+	out := new(Position)
+	for d := uint(0); d < length; d++ {
+		digit := rand.Intn(1<<(d+5) - 1)
+		out = out.Add(uint(digit), 0xFF)
+	}
+	return out
+}
+
+var pos *Position
+
+func benchmarkAllocate(length uint, b *testing.B) {
+	m := make(StrategyMap)
+	l := make([]*Position, b.N*2)
+	for k := 0; k < b.N; k++ {
+		p1 := genPosition(length)
+		p2 := genPosition(length)
+		if !p1.IsBefore(p2) {
+			p1, p2 = p2, p1
+		}
+		if !p1.IsBefore(p2) {
+			// we swapped but still not ordered - the positions are equal.
+			// roll dice again.
+			k--
+			continue
+		}
+		l[2*k] = p1
+		l[2*k+1] = p2
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for k := 0; k < b.N; k++ {
+		pos = Allocate(l[2*k], l[2*k+1], m, 0xF00F00F0)
+	}
+}
+
+func BenchmarkAllocate1(b *testing.B) {
+	benchmarkAllocate(1, b)
+}
+func BenchmarkAllocate2(b *testing.B) {
+	benchmarkAllocate(2, b)
+}
+func BenchmarkAllocate3(b *testing.B) {
+	benchmarkAllocate(3, b)
+}
+func BenchmarkAllocate4(b *testing.B) {
+	benchmarkAllocate(4, b)
+}
+func BenchmarkAllocate5(b *testing.B) {
+	benchmarkAllocate(5, b)
+}

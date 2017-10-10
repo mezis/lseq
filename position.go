@@ -281,7 +281,7 @@ func (pos *Position) walk(lt *Position, rt *Position, cb func(depth uint8, digit
 func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Position {
 	// fmt.Printf("Allocate(%#v, %#v)\n", left, right)
 	if debug && !left.IsBefore(right) {
-		panic("arguments not in order")
+		panic(fmt.Sprint("arguments not in order ", left, right))
 	}
 
 	// find a depth and prefixes with a sufficient interval
