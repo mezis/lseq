@@ -79,29 +79,26 @@ func max(x, y int) int {
 
 // Return a position of length at least "length", padded with zeros on the right
 // as necessary.
-// The site identifier of extra digits is set to "site"
+// The site identifier of extra digits is set to zero.
 //
 // Return the receiver if its length is already "length" or more.
-func (pos *Position) padTo(length uint8, site uid.Uid) *Position {
+func (pos *Position) padTo(length uint8) *Position {
 	if pos.length >= length {
 		return pos
 	}
 
 	out := new(Position)
 	out.length = pos.length
-	out.sites.Set(&pos.sites)
-	siteBig := site.ToBig()
 
-	var shiftDigitsBy uint // = 0
+	var shiftDigitsBy, shiftSitesBy uint // = 0
 	for out.length < length {
 		digitBits := uint(bitsAtDepth(out.length))
 		shiftDigitsBy += digitBits
-
-		out.sites.Lsh(&out.sites, digitBits+uid.Bits)
-		out.sites.Or(&out.sites, siteBig)
+		shiftSitesBy += digitBits + uid.Bits
 		out.length++
 	}
 	out.digits.Lsh(&pos.digits, shiftDigitsBy)
+	out.sites.Lsh(&pos.sites, shiftSitesBy)
 	return out
 }
 
@@ -132,8 +129,8 @@ func (pos *Position) trimTo(length uint8) *Position {
 // appropriate.
 //
 // Return the receiver if already the right length.
-func (pos *Position) prefix(length uint8, site uid.Uid) *Position {
-	return pos.trimTo(length).padTo(length, site)
+func (pos *Position) prefix(length uint8) *Position {
+	return pos.trimTo(length).padTo(length)
 }
 
 // IsBefore -
@@ -142,8 +139,8 @@ func (pos *Position) prefix(length uint8, site uid.Uid) *Position {
 // In practice, this is the lexicographical order on the list of (identifier,
 // site) pairs, implemented as integer comparison after padding.
 func (pos *Position) IsBefore(oth *Position) bool {
-	pos = pos.padTo(oth.length, 0x00)
-	oth = oth.padTo(pos.length, 0x00)
+	pos = pos.padTo(oth.length)
+	oth = oth.padTo(pos.length)
 	return pos.sites.Cmp(&oth.sites) < 0
 }
 
@@ -261,8 +258,8 @@ func Allocate(left *Position, right *Position, m StrategyMap, site uid.Uid) *Pos
 	var interval int
 	var depth uint8
 	for depth = 1; depth < maxDigits; depth++ {
-		ltPrefix = left.prefix(depth, site)
-		rtPrefix = right.prefix(depth, site)
+		ltPrefix = left.prefix(depth)
+		rtPrefix = right.prefix(depth)
 		interval = right.Interval(left)
 		fmt.Printf("interval(%d) = %d\n", depth, interval)
 		if interval >= 1 {
