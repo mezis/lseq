@@ -13,18 +13,24 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// TODO: change Add() to also return an error, and create a
-// makePosition(digits...uint) helper here.
+func makePosition(digits ...uint) *Position {
+	out := new(Position)
+	for _, digit := range digits {
+		out = out.Add(digit, 0xDEADBEEF)
+	}
+	return out
+}
+
+func genPosition(length uint) *Position {
+	out := new(Position)
+	for d := uint(0); d < length; d++ {
+		digit := rand.Intn(1<<(d+5) - 1)
+		out = out.Add(uint(digit), 0xFF)
+	}
+	return out
+}
 
 var _ = Describe("Position", func() {
-	makePosition := func(digits ...uint) *Position {
-		out := new(Position)
-		for _, digit := range digits {
-			out = out.Add(digit, 0xDEADBEEF)
-		}
-		return out
-	}
-
 	Describe("Add", func() {
 		It("Returns a greater position", func() {
 			p0 := makePosition(1)
@@ -147,81 +153,9 @@ var _ = Describe("Position", func() {
 			check(p1, p2)
 		})
 	})
-
-	Describe("Allocate", func() {
-		It("inserts between non-contiguous positions of same length", func() {
-			p1 := makePosition(21, 42)
-			p2 := makePosition(21, 44)
-			m := make(StrategyMap)
-
-			pObs := Allocate(p1, p2, m, 0xF00F00F0)
-
-			// fmt.Printf("pObs = %#v\n", pObs)
-			// Expect(pObs.DigitAt(1)).To(Equal(43))
-			// Expect(pObs.DigitAt(2)).To(Equal(0))
-			Expect(pObs.String()).To(Equal("<21 @DEADBEEF, 43 @F00F00F0>"))
-		})
-
-		It("adds a level between contiguous positions", func() {
-			p1 := makePosition(16, 30)
-			p2 := makePosition(16, 31)
-			m := make(StrategyMap)
-
-			pObs := Allocate(p1, p2, m, 0xF00F00F0)
-
-			// fmt.Printf("pObs = %#v\n", pObs)
-			Expect(pObs.DigitAt(0)).To(Equal(16))
-			Expect(pObs.DigitAt(1)).To(Equal(30))
-			Expect(pObs.Length()).To(Equal(3))
-		})
-	})
 })
 
-func genPosition(length uint) *Position {
-	out := new(Position)
-	for d := uint(0); d < length; d++ {
-		digit := rand.Intn(1<<(d+5) - 1)
-		out = out.Add(uint(digit), 0xFF)
-	}
-	return out
-}
-
-var bmLengths = []uint{7, 5, 3, 1}
-
-var pos *Position
-
-func BenchmarkAllocate(b *testing.B) {
-	fmt.Println("cpuprofile=", cpuprofile)
-	for _, n := range bmLengths {
-		m := make(StrategyMap)
-		N := 1000
-		l := make([]*Position, 2*N)
-		for k := 0; k < N; k++ {
-			p1 := genPosition(n)
-			p2 := genPosition(n)
-			if !p1.IsBefore(p2) {
-				p1, p2 = p2, p1
-			}
-			if !p1.IsBefore(p2) {
-				// we swapped but still not ordered - the positions are equal.
-				// roll dice again.
-				k--
-				continue
-			}
-			l[2*k] = p1
-			l[2*k+1] = p2
-		}
-		runtime.GC()
-
-		b.Run(fmt.Sprintf("length=%d", n), func(b *testing.B) {
-			b.ReportAllocs()
-			for k := 0; k < b.N; k++ {
-				j := k % N
-				pos = Allocate(l[2*j], l[2*j+1], m, 0xF00F00F0)
-			}
-		})
-	}
-}
+var bmLengths = []uint{24, 12, 6, 3, 1}
 
 var res bool
 
@@ -230,8 +164,9 @@ func BenchmarkIsBefore(b *testing.B) {
 		N := 1000
 		l := make([]*Position, 2*N)
 		for k := 0; k < N; k++ {
+			p := uint(int(n) + rand.Intn(3) - 1)
 			p1 := genPosition(n)
-			p2 := genPosition(n)
+			p2 := genPosition(p)
 			l[2*k] = p1
 			l[2*k+1] = p2
 		}

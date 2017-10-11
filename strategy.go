@@ -15,10 +15,10 @@ const (
 	stategyCount
 )
 
-// getStrategy --
+// get --
 // Return the stategy for "depth", if needed by picking a random one and
 // updating the map.
-func getStrategy(m StrategyMap, depth uint8) strategy {
+func (m StrategyMap) get(depth uint8) strategy {
 	s, ok := m[depth]
 	if !ok {
 		s = strategy(rand.Intn(2) + 1)
