@@ -25,7 +25,6 @@ type Allocator struct {
 // Suitable to allocate a position between two others.
 func NewAllocator() *Allocator {
 	out := new(Allocator)
-	out.m = make(StrategyMap)
 	out.n.SetUint64(0)
 	return out
 }
