@@ -14,12 +14,12 @@ import (
 )
 
 func makePosition(digits ...uint) *Position {
-	out := new(Position)
-	for _, digit := range digits {
-		out = out.Add(digit, 0xDEADBEEF)
+		out := new(Position)
+		for _, digit := range digits {
+			out = out.Add(digit, 0xDEADBEEF)
+		}
+		return out
 	}
-	return out
-}
 
 func genPosition(length uint) *Position {
 	out := new(Position)
@@ -153,7 +153,7 @@ var _ = Describe("Position", func() {
 			check(p1, p2)
 		})
 	})
-})
+		})
 
 var bmLengths = []uint{24, 12, 6, 3, 1}
 
