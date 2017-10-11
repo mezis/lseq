@@ -191,7 +191,6 @@ var bmLengths = []uint{7, 5, 3, 1}
 var pos *Position
 
 func BenchmarkAllocate(b *testing.B) {
-	fmt.Println("cpuprofile=", cpuprofile)
 	for _, n := range bmLengths {
 		m := make(StrategyMap)
 		N := 1000
