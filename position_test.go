@@ -14,18 +14,18 @@ import (
 )
 
 func makePosition(digits ...uint) *Position {
-		out := new(Position)
-		for _, digit := range digits {
-			out = out.Add(digit, 0xDEADBEEF)
-		}
-		return out
+	out := new(Position)
+	for _, digit := range digits {
+		out = out.Append(digit, 0xDEADBEEF)
 	}
+	return out
+}
 
 func genPosition(length uint) *Position {
 	out := new(Position)
 	for d := uint(0); d < length; d++ {
 		digit := rand.Intn(1<<(d+5) - 1)
-		out = out.Add(uint(digit), 0xFF)
+		out = out.Append(uint(digit), 0xFF)
 	}
 	return out
 }
@@ -64,8 +64,8 @@ var _ = Describe("Position", func() {
 
 	Describe("SiteAt", func() {
 		p0 := new(Position)
-		p1 := p0.Add(1, 0xDEADBEEF)
-		p2 := p1.Add(2, 0xF00F00F0)
+		p1 := p0.Append(1, 0xDEADBEEF)
+		p2 := p1.Append(2, 0xF00F00F0)
 		It("can return the 1st site", func() {
 			Expect(p2.SiteAt(0)).To(Equal(uid.Uid(0xDEADBEEF)))
 		})
@@ -124,8 +124,8 @@ var _ = Describe("Position", func() {
 		})
 
 		It("is true with LHS start-sentinel", func() {
-			p1 := new(Position).Add(0, 0)
-			p2 := new(Position).Add(1, 0)
+			p1 := new(Position).Append(0, 0)
+			p2 := new(Position).Append(1, 0)
 			check(p1, p2)
 		})
 
@@ -142,8 +142,8 @@ var _ = Describe("Position", func() {
 		})
 
 		It("is true when equal indices, LHS lower site ID", func() {
-			p1 := makePosition(21).Add(61, 0)
-			p2 := makePosition(21).Add(61, 1)
+			p1 := makePosition(21).Append(61, 0)
+			p2 := makePosition(21).Append(61, 1)
 			check(p1, p2)
 		})
 
@@ -153,7 +153,7 @@ var _ = Describe("Position", func() {
 			check(p1, p2)
 		})
 	})
-		})
+})
 
 var bmLengths = []uint{24, 12, 6, 3, 1}
 

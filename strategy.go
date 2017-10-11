@@ -12,8 +12,8 @@ const (
 	undefinedStrategy strategy = iota
 	boundaryLoStrategy
 	boundaryHiStrategy
-	stategyCount
 )
+const strategyCount = int(boundaryHiStrategy)
 
 // get --
 // Return the stategy for "depth", if needed by picking a random one and
@@ -21,7 +21,7 @@ const (
 func (m StrategyMap) get(depth uint8) strategy {
 	s := m[depth]
 	if s == undefinedStrategy {
-		s = strategy(rand.Intn(2) + 1)
+		s = strategy(rand.Intn(strategyCount) + 1)
 		m[depth] = s
 	}
 	return s

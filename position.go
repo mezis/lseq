@@ -69,77 +69,13 @@ func min(x, y int) int {
 	}
 	return y
 }
+
 func max(x, y int) int {
 	if x > y {
 		return x
 	}
 	return y
 }
-
-// // Change the receiver to be identical to `oth`
-// func (pos *Position) clone(oth *Position) {
-// 	pos.length = oth.length
-// 	pos.digits.Set(&oth.digits)
-// 	pos.sites.Set(&oth.sites)
-// }
-
-// // Change the position to be length at least `length`, with the `length` most
-// // significant digits taken from `oth`.
-// //
-// // Extra digits and their site identifiers are set to zero.
-// func (pos *Position) padTo(oth *Position, length uint8) {
-// 	pos.length = oth.length
-
-// 	if pos.length >= length {
-// 		pos.digits.Set(&oth.digits)
-// 		pos.sites.Set(&oth.sites)
-// 		return
-// 	}
-
-// 	var shiftDigitsBy, shiftSitesBy uint // = 0
-// 	for pos.length < length {
-// 		digitBits := uint(bitsAtDepth(pos.length))
-// 		shiftDigitsBy += digitBits
-// 		shiftSitesBy += digitBits + uid.Bits
-// 		pos.length++
-// 	}
-// 	pos.digits.Lsh(&oth.digits, shiftDigitsBy)
-// 	pos.sites.Lsh(&oth.sites, shiftSitesBy)
-// }
-
-// // Change the position to have length at most `length`, taking up to `length` of
-// // the most significant digits or `oth`.
-// func (pos *Position) trimTo(oth *Position, length uint8) {
-// 	pos.length = oth.length
-
-// 	if pos.length <= length {
-// 		pos.digits.Set(&oth.digits)
-// 		pos.sites.Set(&oth.sites)
-// 		return
-// 	}
-
-// 	var shiftDigitsBy, shiftSitesBy uint // = 0
-// 	for pos.length > length {
-// 		digitBits := uint(bitsAtDepth(pos.length - 1))
-// 		shiftDigitsBy += digitBits
-// 		shiftSitesBy += digitBits + uid.Bits
-// 		pos.length--
-// 	}
-// 	pos.digits.Rsh(&oth.digits, shiftDigitsBy)
-// 	pos.sites.Rsh(&oth.sites, shiftSitesBy)
-// }
-
-// // Set the position to be a prefix of the `length` most significant digits of
-// // `oth`, padding with zeroes or removing digits as appropriate.
-// func (pos *Position) prefix(oth *Position, length uint8) {
-// 	if oth.length < length {
-// 		pos.padTo(oth, length)
-// 	} else if oth.length > length {
-// 		pos.trimTo(oth, length)
-// 	} else {
-// 		pos.clone(oth)
-// 	}
-// }
 
 // IsBefore -
 // Return true iff "pos" is before "oth" in the partial order defined by Logoot.
@@ -185,15 +121,15 @@ func (pos *Position) equals(oth *Position) bool {
 	return pos.length == oth.length && pos.sites.Cmp(&oth.sites) == 0
 }
 
-// Add an identifier (index and site identifier) to the position,
+// Append an identifier (index and site identifier) to the position,
 // returning the new position
-func (pos *Position) Add(digit uint, site uid.Uid) *Position {
+func (pos *Position) Append(digit uint, site uid.Uid) *Position {
 	if pos.length >= maxDigits {
 		return nil // max position length reached
 	}
 
 	digitBits := uint(bitsAtDepth(pos.length))
-	if digit < 0 || digit >= 1<<digitBits {
+	if digit >= 1<<digitBits {
 		return nil // bad index value"
 	}
 
@@ -224,7 +160,7 @@ func (pos *Position) digitAt(out *big.Int, depth uint8) {
 	}
 	shiftBy := uint(0)
 	for d := pos.length - 1; d > depth; d-- {
-		shiftBy += uint(bitsAtDepth(uint8(d)))
+		shiftBy += uint(bitsAtDepth(d))
 	}
 	out.Rsh(&pos.digits, shiftBy)
 	mask := digitMask[depth]
@@ -249,7 +185,7 @@ func (pos *Position) siteAt(out *big.Int, depth uint8) {
 	}
 	shiftBy := uint(0)
 	for d := pos.length - 1; d > depth; d-- {
-		shiftBy += uint(bitsAtDepth(uint8(d))) + uid.Bits
+		shiftBy += uint(bitsAtDepth(d)) + uid.Bits
 	}
 
 	out.Rsh(&pos.sites, shiftBy)

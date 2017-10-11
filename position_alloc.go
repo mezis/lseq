@@ -2,10 +2,8 @@ package lseq
 
 import (
 	"fmt"
-	"log"
 	"math/big"
 	"math/rand"
-	"os"
 
 	"github.com/mezis/lseq/uid"
 )
@@ -29,6 +27,33 @@ func NewAllocator() *Allocator {
 	return out
 }
 
+// How many bits to left-shift `digits` by, if currently of length `a`,
+// to be length `b` ?
+//
+// TODO: this could be computed as a difference of cum-sums of bit counts, to
+// avoid the loop.
+func (*Allocator) shiftBits(a uint8, b uint8) uint {
+	out := uint(0)
+	for l := a; l < b; l++ {
+		out += uint(bitsAtDepth(l))
+	}
+	return out
+}
+
+// Set `pos` to be a prefix of `oth` of length `length`, paddding with
+// zeroes or trimming as appropriate.
+// Site identifiers are ignored.
+func (alloc *Allocator) setPrefix(pos *Position, oth *Position, length uint8) {
+	if oth.length > length { // trim
+		pos.digits.Rsh(&oth.digits, alloc.shiftBits(length, oth.length))
+	} else if oth.length < length { // pad
+		pos.digits.Lsh(&oth.digits, alloc.shiftBits(oth.length, length))
+	} else { // copy
+		pos.digits.Set(&oth.digits)
+	}
+	pos.length = length
+}
+
 // Call -
 // Implementation of the core LSEQ allocation algorithm. Sets `out` to a new position between the
 // `left` and `right` ones, with `site` as a site identifier for new digits.
@@ -38,38 +63,14 @@ func (alloc *Allocator) Call(out *Position, left *Position, right *Position, sit
 		panic(fmt.Sprint("arguments not in order ", left, right))
 	}
 
-	// how many bits to left-shift `digits` by, if currently of length `a`,
-	// to be length `b` ?
-	shiftBits := func(a uint8, b uint8) uint {
-		out := uint(0)
-		for l := a; l < b; l++ {
-			out += uint(bitsAtDepth(l))
-		}
-		return out
-	}
-
-	// Set `pos` to be a prefix of `oth` of length `length`, paddding with
-	// zeroes or trimming as appropriate.
-	// Site identifiers are ignored.
-	setPrefix := func(pos *Position, oth *Position, length uint8) {
-		if oth.length > length { // trim
-			pos.digits.Rsh(&oth.digits, shiftBits(length, oth.length))
-		} else if oth.length < length { // pad
-			pos.digits.Lsh(&oth.digits, shiftBits(oth.length, length))
-		} else { // copy
-			pos.digits.Set(&oth.digits)
-		}
-		pos.length = length
-	}
-
 	// find a depth and prefixes with a sufficient interval
 	//logger.Printf("** finding prefixes\n")
 	var interval int
 	var depth uint8
 	for depth = 1; depth < maxDigits; depth++ {
 		//logger.Printf("*** depth %d\n", depth)
-		setPrefix(&alloc.lt, left, depth)
-		setPrefix(&alloc.rt, right, depth)
+		alloc.setPrefix(&alloc.lt, left, depth)
+		alloc.setPrefix(&alloc.rt, right, depth)
 		interval = alloc.rt.Interval(&alloc.lt)
 		//logger.Printf("  left  = %#v\n", &alloc.lt)
 		//logger.Printf("  right = %#v\n", &alloc.rt)
@@ -141,5 +142,3 @@ func (alloc *Allocator) Call(out *Position, left *Position, right *Position, sit
 func bigEql(a *big.Int, b *big.Int) bool {
 	return a.Cmp(b) == 0
 }
-
-var logger = log.New(os.Stderr, "[lseq.Allocator]", log.Lmicroseconds)

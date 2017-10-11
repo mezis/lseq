@@ -10,15 +10,15 @@ import (
 // Document - a mutable ordered lists of atoms (e.g lines, characters)
 type Document struct {
 	uid.Uid
-	atoms         []*atom     // the ordered sequence of atoms
-	allocStrategy StrategyMap // depth -> alloc strategy
+	atoms []*atom // the ordered sequence of atoms
+	alloc *Allocator
 }
 
 // NewDocument returns a new document, with two unremovable atoms - "start" and
 // "stop" sentinel strings.
 func NewDocument() *Document {
-	headPos := new(Position).Add(0, 0)
-	tailPos := new(Position).Add(maxDigitAtDepth(0), 0)
+	headPos := new(Position).Append(0, 0)
+	tailPos := new(Position).Append(maxDigitAtDepth(0), 0)
 	if headPos == nil || tailPos == nil {
 		panic("could not create positions")
 	}
@@ -26,6 +26,7 @@ func NewDocument() *Document {
 	doc := Document{Uid: uid.Generate(), atoms: make([]*atom, 0, 2)}
 	doc.addAtom(newAtom(headPos, ""))
 	doc.addAtom(newAtom(tailPos, ""))
+	doc.alloc = NewAllocator()
 	return &doc
 }
 
