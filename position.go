@@ -286,7 +286,7 @@ func (pos *Position) Interval(oth *Position) int {
 }
 
 // String --
-// Implement `fmt.Stringer` so that the `%#v` placeholder works for `Position`
+// Implement `fmt.Stringer` so that the `%v` placeholder works for `Position`
 // values.
 func (pos *Position) String() string {
 	l := make([]string, pos.length)
@@ -296,6 +296,9 @@ func (pos *Position) String() string {
 	return fmt.Sprintf("<%s>", strings.Join(l, ", "))
 }
 
+// GoString --
+// Implement `fmt.GoStringer` so that the `%v` placeholder works for `Position`
+// values.
 func (pos *Position) GoString() string {
 	return pos.String()
 }

@@ -21,6 +21,8 @@ type Allocator struct {
 	lt, rt  Position
 }
 
+// NewAllocator -
+// Suitable to allocate a position between two others.
 func NewAllocator() *Allocator {
 	out := new(Allocator)
 	out.m = make(StrategyMap)
@@ -28,9 +30,9 @@ func NewAllocator() *Allocator {
 	return out
 }
 
-// Allocate -
-// Implementation of the core LSEQ algorithm. Return a new position between the
-// "left" and "right" ones.
+// Call -
+// Implementation of the core LSEQ allocation algorithm. Sets `out` to a new position between the
+// `left` and `right` ones, with `site` as a site identifier for new digits.
 func (alloc *Allocator) Call(out *Position, left *Position, right *Position, site uid.Uid) {
 	//logger.Printf("Allocator.Call(%#v, %#v)\n", left, right)
 	if debug && !left.IsBefore(right) {

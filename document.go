@@ -30,7 +30,7 @@ func NewDocument() *Document {
 }
 
 // Add the atom in the sorted array
-func (doc *Document) addAtom(a *atom) error {
+func (doc *Document) addAtom(a *atom) {
 	// find where to insert atom
 	idx := sort.Search(len(doc.atoms), func(k int) bool {
 		return a.pos.IsBefore(doc.atoms[k].pos)
@@ -41,7 +41,6 @@ func (doc *Document) addAtom(a *atom) error {
 	copy(doc.atoms[:idx], head)
 	copy(doc.atoms[idx+1:], tail)
 	doc.atoms[idx] = a
-	return nil
 }
 
 // Insert --
