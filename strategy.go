@@ -9,18 +9,18 @@ type strategy uint8
 type StrategyMap [maxDigits]strategy
 
 const (
-	undefinedStrategy strategy = iota
+	UndefinedStrategy strategy = iota
 	boundaryLoStrategy
 	boundaryHiStrategy
 )
 const strategyCount = int(boundaryHiStrategy)
 
-// get --
+// Get --
 // Return the stategy for "depth", if needed by picking a random one and
 // updating the map.
-func (m StrategyMap) get(depth uint8) strategy {
+func (m *StrategyMap) Get(depth uint8) strategy {
 	s := m[depth]
-	if s == undefinedStrategy {
+	if s == UndefinedStrategy {
 		s = strategy(rand.Intn(strategyCount) + 1)
 		m[depth] = s
 	}

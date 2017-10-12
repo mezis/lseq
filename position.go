@@ -227,7 +227,12 @@ func (pos *Position) Interval(oth *Position) int {
 func (pos *Position) String() string {
 	l := make([]string, pos.length)
 	for d := uint8(0); d < pos.length; d++ {
-		l[d] = fmt.Sprintf("%d %#v", pos.DigitAt(d), pos.SiteAt(d))
+		s := pos.SiteAt(d)
+		if s == 0 {
+			l[d] = fmt.Sprintf("%d", pos.DigitAt(d))
+		} else {
+			l[d] = fmt.Sprintf("%d %#v", pos.DigitAt(d), s)
+		}
 	}
 	return fmt.Sprintf("<%s>", strings.Join(l, ", "))
 }

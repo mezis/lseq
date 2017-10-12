@@ -1,9 +1,8 @@
 package lseq
 
 type atom struct {
-	pos       *Position // position identifier
-	data      string    // the actual text
-	tombstone bool      // whether the atom was flagged as deleted
+	pos  *Position // position identifier
+	data string    // the actual text
 }
 
 func newAtom(p *Position, d string) *atom {

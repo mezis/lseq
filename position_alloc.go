@@ -58,23 +58,23 @@ func (alloc *Allocator) setPrefix(pos *Position, oth *Position, length uint8) {
 // Implementation of the core LSEQ allocation algorithm. Sets `out` to a new position between the
 // `left` and `right` ones, with `site` as a site identifier for new digits.
 func (alloc *Allocator) Call(out *Position, left *Position, right *Position, site uid.Uid) {
-	//logger.Printf("Allocator.Call(%#v, %#v)\n", left, right)
+	//fmt.Printf("Allocator.Call(\n\t%#v,\n\t%#v)\n", left, right)
 	if debug && !left.IsBefore(right) {
 		panic(fmt.Sprint("arguments not in order ", left, right))
 	}
 
 	// find a depth and prefixes with a sufficient interval
-	//logger.Printf("** finding prefixes\n")
+	//fmt.Printf("** finding prefixes\n")
 	var interval int
 	var depth uint8
 	for depth = 1; depth < maxDigits; depth++ {
-		//logger.Printf("*** depth %d\n", depth)
+		//fmt.Printf("*** depth %d\n", depth)
 		alloc.setPrefix(&alloc.lt, left, depth)
 		alloc.setPrefix(&alloc.rt, right, depth)
 		interval = alloc.rt.Interval(&alloc.lt)
-		//logger.Printf("  left  = %#v\n", &alloc.lt)
-		//logger.Printf("  right = %#v\n", &alloc.rt)
-		//logger.Printf("  interval(%d) = %d\n", depth, interval)
+		//fmt.Printf("  left  = %#v\n", &alloc.lt)
+		//fmt.Printf("  right = %#v\n", &alloc.rt)
+		//fmt.Printf("  interval(%d) = %d\n", depth, interval)
 		if interval >= 1 {
 			break
 		}
@@ -82,16 +82,20 @@ func (alloc *Allocator) Call(out *Position, left *Position, right *Position, sit
 	if debug && depth >= maxDigits {
 		panic("max depth reached")
 	}
+	if debug && interval < 1 {
+		panic("failed to locate big enough interval")
+	}
 
 	// calculate digits for the new position
-	//logger.Println("** calculate digits")
+	//fmt.Println("** calculate digits")
+	//fmt.Println("*** interval:", interval)
 	offset := rand.Intn(min(boundary, interval)) + 1
 
 	out.length = depth
 	out.sites.SetInt64(int64(0))
 
 	alloc.n.SetInt64(int64(offset))
-	s := alloc.m.get(depth)
+	s := alloc.m.Get(depth)
 	switch s {
 	case boundaryLoStrategy:
 		out.digits.Add(&alloc.lt.digits, &alloc.n)
@@ -100,12 +104,12 @@ func (alloc *Allocator) Call(out *Position, left *Position, right *Position, sit
 	default:
 		panic(fmt.Sprintf("unknown strategy %#v", s))
 	}
-	//logger.Println("*** strategy:", s)
-	//logger.Println("*** offset:", &alloc.n)
-	//logger.Println("*** result:", out)
+	//fmt.Printf("*** strategy[%d]: %s\n", depth, s)
+	//fmt.Println("*** offset:", &alloc.n)
+	//fmt.Println("*** result:", out)
 
 	// merge site identifiers
-	//logger.Println("** interleave new indentifiers")
+	//fmt.Println("** interleave new indentifiers")
 	for d := uint8(0); d < out.length; d++ {
 		// read digits
 		out.digitAt(&alloc.n, d)
@@ -131,12 +135,12 @@ func (alloc *Allocator) Call(out *Position, left *Position, right *Position, sit
 
 	// check and return
 	if debug && !(left.IsBefore(out) && out.IsBefore(right)) {
-		//logger.Printf("left = %#v\n", left)
-		//logger.Printf("out = %#v\n", out)
-		//logger.Printf("right = %#v\n", right)
+		//fmt.Printf("left = %#v\n", left)
+		//fmt.Printf("out = %#v\n", out)
+		//fmt.Printf("right = %#v\n", right)
 		panic("allocated position not in order")
 	}
-	//logger.Println("** returning ", out)
+	//fmt.Println("** returning ", out)
 }
 
 func bigEql(a *big.Int, b *big.Int) bool {
