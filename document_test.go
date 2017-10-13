@@ -1,6 +1,11 @@
 package lseq_test
 
 import (
+	"fmt"
+	"math/rand"
+	"runtime"
+	"testing"
+
 	"github.com/mezis/lseq"
 	"github.com/mezis/lseq/uid"
 	. "github.com/onsi/ginkgo"
@@ -14,6 +19,11 @@ var _ = Describe("lseq", func() {
 		It("passes", func() {
 			x := lseq.NewDocument()
 			Expect(x).NotTo(Equal(nil))
+		})
+
+		It("has length zero", func() {
+			x := lseq.NewDocument()
+			Expect(x.Length()).To(Equal(0))
 		})
 	})
 
@@ -49,14 +59,17 @@ var _ = Describe("lseq", func() {
 	})
 
 	Describe("Document.Insert", func() {
-		It("increases the line count", func() {
+		It("increases the atom count", func() {
 			doc := buildDocument()
 			Expect(doc.Length()).To(Equal(3))
 		})
+
 		It("adds the data", func() {
 			doc := buildDocument()
 			Expect(doc.Data()).To(Equal([]string{"foo", "bar", "qux"}))
 		})
+
+		XIt("returns false if the atom already existed", func() {})
 	})
 	Describe("Document.Delete", func() {
 		perform := func() (*lseq.Document, interface{}) {
@@ -79,7 +92,38 @@ var _ = Describe("lseq", func() {
 			doc, _ := perform()
 			Expect(doc.Data()).To(Equal([]string{"foo", "qux"}))
 		})
+
+		XIt("returns false when the item didn't exist", func() {})
 	})
 
-	Describe("Document.Each", func() {})
+	Describe("Document.Each", func() {
+		XIt("iterates over all items", func() {})
+	})
 })
+
+func BenchmarkDocumentRandomEdits(b *testing.B) {
+	for _, exp := range []uint{10, 11, 12, 13, 14, 15, 16} {
+		count := 1 << exp
+		doc := lseq.NewDocument()
+		for k, pos := range doc.Allocate(0, count, 0x00) {
+			str := fmt.Sprintf("atom%04d", k)
+			doc.Insert(pos, str)
+		}
+		if doc.Length() != count {
+			panic("benchmark doc has wrong length")
+		}
+		runtime.GC()
+
+		b.Run(fmt.Sprintf("N=%d", count), func(b *testing.B) {
+			b.ReportAllocs()
+			for k := 0; k < b.N; k++ {
+				n := rand.Intn(doc.Length())
+				p, _ := doc.At(n)
+				str := fmt.Sprintf("edit%05d", k)
+				q := doc.Allocate(n, 1, 0x00)
+				doc.Delete(p)
+				doc.Insert(q[0], str)
+			}
+		})
+	}
+}

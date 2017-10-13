@@ -44,7 +44,7 @@ var _ = Describe("Allocator", func() {
 
 var pos Position
 
-func BenchmarkAllocate(b *testing.B) {
+func BenchmarkPositionAllocate(b *testing.B) {
 	alloc := NewAllocator()
 	for _, n := range bmLengths {
 		N := 1000

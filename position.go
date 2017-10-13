@@ -83,6 +83,12 @@ func max(x, y int) int {
 // In practice, this is the lexicographical order on the list of (identifier,
 // site) pairs, implemented as integer comparison after padding.
 func (pos *Position) IsBefore(oth *Position) bool {
+	return pos.Compare(oth) < 0
+}
+
+// Compare returns -1 when the argument position is greater, 0 if equal, and 1
+// if lower.
+func (pos *Position) Compare(oth *Position) int {
 	// how many bits to left-shift `sites` by, if currently of length `a`,
 	// to be length `b` ?
 	padBits := func(a uint8, b uint8) uint {
@@ -105,7 +111,7 @@ func (pos *Position) IsBefore(oth *Position) bool {
 		oth.sites.Lsh(&oth.sites, othPad)
 	}
 
-	res := pos.sites.Cmp(&oth.sites) < 0
+	res := pos.sites.Cmp(&oth.sites)
 
 	if posPad > 0 {
 		pos.sites.Rsh(&pos.sites, posPad)

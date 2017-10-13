@@ -1,20 +1,20 @@
 package lseq
 
 import (
-	"sort"
-
+	"github.com/Workiva/go-datastructures/slice/skip"
 	"github.com/mezis/lseq/uid"
 )
 
-// Document - a mutable ordered lists of atoms (e.g lines, characters)
+// Document is a mutable ordered lists of atoms (e.g lines, characters)
 type Document struct {
 	uid.Uid
-	atoms []*atom // the sequence of atoms, always kept sorted
+	atoms *skip.SkipList
 	alloc *Allocator
 }
 
-// NewDocument returns a new document, with two unremovable atoms - "start" and
-// "stop" sentinel strings.
+// NewDocument returns a new document
+//
+// Internally, this has two unremovable atoms - "start" and "stop" sentinels
 func NewDocument() *Document {
 	headPos := new(Position).Append(0, 0)
 	tailPos := new(Position).Append(maxDigitAtDepth(0), 0)
@@ -22,114 +22,79 @@ func NewDocument() *Document {
 		panic("could not create positions")
 	}
 
-	doc := Document{Uid: uid.Generate(), atoms: make([]*atom, 0, 2)}
-	doc.addAtom(newAtom(headPos, ""))
-	doc.addAtom(newAtom(tailPos, ""))
+	doc := new(Document)
+	doc.Uid = uid.Generate()
+	doc.atoms = skip.New(uint8(0))
+	doc.atoms.Insert(newAtom(headPos, ""))
+	doc.atoms.Insert(newAtom(tailPos, ""))
 	doc.alloc = NewAllocator()
-	return &doc
+	return doc
 }
 
+// Length returns the current number of atoms in the document.
 func (doc *Document) Length() int {
-	return len(doc.atoms) - 2
+	return int(doc.atoms.Len()) - 2
 }
 
+// Data returns all the atom data currently in the document, in order.
 func (doc *Document) Data() []string {
-	out := make([]string, len(doc.atoms)-2)
+	out := make([]string, doc.Length())
 	doc.Each(func(k uint, _ *Position, data string) {
 		out[k] = data
 	})
 	return out
 }
 
-// Add the atom in the sorted array
-func (doc *Document) addAtom(a *atom) {
-	// find where to insert atom
-	idx := sort.Search(len(doc.atoms), func(k int) bool {
-		return a.pos.IsBefore(doc.atoms[k].pos)
-	})
-	head := doc.atoms[:idx]
-	tail := doc.atoms[idx:]
-	doc.atoms = make([]*atom, len(doc.atoms)+1)
-	copy(doc.atoms[:idx], head)
-	copy(doc.atoms[idx+1:], tail)
-	doc.atoms[idx] = a
-}
-
-// Insert
-// add a new atom with position `pos` and content `data`.
-// TODO: Returns false if `pos` already exists in the document (and in that case, adds
+// Insert  adds a new atom with position `pos` and content `data`.
+//
+// Returns false if `pos` already exists in the document (and in that case, adds
 // nothing)
 func (doc *Document) Insert(pos *Position, data string) bool {
-	// locate the position just after in the atom array
-	idx := sort.Search(len(doc.atoms), func(k int) bool {
-		return pos.IsBefore(doc.atoms[k].pos)
-	})
-
-	if idx == 0 {
-		panic("specified position before head sentinel")
-	}
-	if idx == len(doc.atoms) {
-		panic("specified position after tail sentinel")
-	}
-
-	// extend array and add new atom
-	// TODO: preprovision more capcity to avoid allocations.
-	head := doc.atoms[:idx]
-	tail := doc.atoms[idx:]
-	doc.atoms = make([]*atom, len(doc.atoms)+1)
-	copy(doc.atoms[:idx], head)
-	copy(doc.atoms[idx+1:], tail)
-	doc.atoms[idx] = newAtom(pos, data)
-
-	return true
+	a := newAtom(pos, data)
+	res := doc.atoms.Insert(a)
+	return len(res) == 0
 }
 
-// Delete
-// removes the atom referenced `pos` from the document.
+// Delete removes the atom referenced `pos` from the document.
+//
+// Returns true iff the position was present.
 func (doc *Document) Delete(pos *Position) bool {
-	idx := sort.Search(len(doc.atoms), func(k int) bool {
-		// return a.pos.IsBefore(doc.atoms[k].pos)
-		return pos.equals(doc.atoms[k].pos)
-	})
-
-	if idx == 0 || idx == len(doc.atoms)-1 {
-		panic("cannot remove sentinel atoms")
-	}
-	if idx == len(doc.atoms) {
-		// not found
-		return false
-	}
-
-	copy(doc.atoms[idx:len(doc.atoms)-1], doc.atoms[idx+1:])
-	doc.atoms = doc.atoms[:len(doc.atoms)-1]
-	return true
+	a := atom{pos: pos}
+	res := doc.atoms.Delete(&a)
+	return len(res) == 1
 }
 
-// Each --
-// Iterate through atoms, passing them to the "cb" callback.
+// Each iterates through atoms, passing them to the "cb" callback.
 // Skips the first and last "sentinel" atoms.
 func (doc *Document) Each(cb func(number uint, pos *Position, data string)) {
-	for k, a := range doc.atoms[1 : len(doc.atoms)-1] {
+	head := doc.atoms.ByPosition(1)
+	n := doc.Length()
+	if head == nil {
+		return
+	}
+	iter := doc.atoms.Iter(head)
+	for k := 0; k < n; k++ {
+		iter.Next()
+		a := iter.Value().(*atom)
+		// fmt.Println("iter:", k, a.pos, a.data)
 		cb(uint(k), a.pos, a.data)
 	}
 }
 
-// At
-// returns the atom indexed `idx`.
+// At returns the atom indexed `idx`.
 func (doc *Document) At(idx int) (*Position, string) {
-	if debug && (idx < 0 || idx >= len(doc.atoms)) {
+	if debug && (idx < 0 || idx >= doc.Length()) {
 		panic("index out of bounds")
 	}
 
-	a := doc.atoms[idx+1]
+	a := doc.atoms.ByPosition(uint64(idx + 1)).(*atom)
 	return a.pos, a.data
 }
 
-// Allocate
-// returns positions ordered immediately after the atom at index `idx`.
-// The return slice is ordered.
+// Allocate returns positions ordered immediately before the atom at index `idx`.
+// The resulting slice is ordered.
 func (doc *Document) Allocate(idx int, count int, site uid.Uid) []*Position {
-	if debug && (idx < 0 || idx >= len(doc.atoms)) {
+	if debug && (idx < 0 || idx >= doc.Length()) {
 		panic("index out of bounds")
 	}
 	if count < 0 {
@@ -138,8 +103,8 @@ func (doc *Document) Allocate(idx int, count int, site uid.Uid) []*Position {
 
 	out := make([]*Position, count)
 
-	left := doc.atoms[idx].pos
-	right := doc.atoms[idx+1].pos
+	left := doc.atoms.ByPosition(uint64(idx)).(*atom).pos
+	right := doc.atoms.ByPosition(uint64(idx + 1)).(*atom).pos
 
 	for k := range out {
 		p := new(Position)

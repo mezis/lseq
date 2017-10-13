@@ -159,7 +159,7 @@ var bmLengths = []uint{24, 12, 6, 3, 1}
 
 var res bool
 
-func BenchmarkIsBefore(b *testing.B) {
+func BenchmarkPositionIsBefore(b *testing.B) {
 	for _, n := range bmLengths {
 		N := 1000
 		l := make([]*Position, 2*N)
