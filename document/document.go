@@ -1,7 +1,9 @@
-package lseq
+package document
 
 import (
+	"github.com/Workiva/go-datastructures/common"
 	"github.com/Workiva/go-datastructures/slice/skip"
+	"github.com/mezis/lseq/position"
 	"github.com/mezis/lseq/uid"
 )
 
@@ -9,25 +11,35 @@ import (
 type Document struct {
 	uid.Uid
 	atoms *skip.SkipList
-	alloc *Allocator
+	alloc *position.Allocator
+}
+
+type atom struct {
+	pos  *position.Position // position identifier
+	data string             // the actual text
+}
+
+func newAtom(p *position.Position, d string) *atom {
+	out := new(atom)
+	out.pos = p
+	out.data = d
+	return out
+}
+
+func (a *atom) Compare(b common.Comparator) int {
+	return a.pos.Compare(b.(*atom).pos)
 }
 
 // NewDocument returns a new document
 //
 // Internally, this has two unremovable atoms - "start" and "stop" sentinels
 func NewDocument() *Document {
-	headPos := new(Position).Append(0, 0)
-	tailPos := new(Position).Append(maxDigitAtDepth(0), 0)
-	if headPos == nil || tailPos == nil {
-		panic("could not create positions")
-	}
-
 	doc := new(Document)
 	doc.Uid = uid.Generate()
 	doc.atoms = skip.New(uint8(0))
-	doc.atoms.Insert(newAtom(headPos, ""))
-	doc.atoms.Insert(newAtom(tailPos, ""))
-	doc.alloc = NewAllocator()
+	doc.atoms.Insert(newAtom(position.SentinelHead, ""))
+	doc.atoms.Insert(newAtom(position.SentinelTail, ""))
+	doc.alloc = position.NewAllocator()
 	return doc
 }
 
@@ -39,7 +51,7 @@ func (doc *Document) Length() int {
 // Data returns all the atom data currently in the document, in order.
 func (doc *Document) Data() []string {
 	out := make([]string, doc.Length())
-	doc.Each(func(k uint, _ *Position, data string) {
+	doc.Each(func(k uint, _ *position.Position, data string) {
 		out[k] = data
 	})
 	return out
@@ -49,7 +61,7 @@ func (doc *Document) Data() []string {
 //
 // Returns false if `pos` already exists in the document (and in that case, adds
 // nothing)
-func (doc *Document) Insert(pos *Position, data string) bool {
+func (doc *Document) Insert(pos *position.Position, data string) bool {
 	a := newAtom(pos, data)
 	res := doc.atoms.Insert(a)
 	return len(res) == 0
@@ -58,7 +70,7 @@ func (doc *Document) Insert(pos *Position, data string) bool {
 // Delete removes the atom referenced `pos` from the document.
 //
 // Returns true iff the position was present.
-func (doc *Document) Delete(pos *Position) bool {
+func (doc *Document) Delete(pos *position.Position) bool {
 	a := atom{pos: pos}
 	res := doc.atoms.Delete(&a)
 	return len(res) == 1
@@ -66,7 +78,7 @@ func (doc *Document) Delete(pos *Position) bool {
 
 // Each iterates through atoms, passing them to the "cb" callback.
 // Skips the first and last "sentinel" atoms.
-func (doc *Document) Each(cb func(number uint, pos *Position, data string)) {
+func (doc *Document) Each(cb func(number uint, pos *position.Position, data string)) {
 	head := doc.atoms.ByPosition(1)
 	n := doc.Length()
 	if head == nil {
@@ -82,7 +94,7 @@ func (doc *Document) Each(cb func(number uint, pos *Position, data string)) {
 }
 
 // At returns the atom indexed `idx`.
-func (doc *Document) At(idx int) (*Position, string) {
+func (doc *Document) At(idx int) (*position.Position, string) {
 	if debug && (idx < 0 || idx >= doc.Length()) {
 		panic("index out of bounds")
 	}
@@ -93,7 +105,7 @@ func (doc *Document) At(idx int) (*Position, string) {
 
 // Allocate returns positions ordered immediately before the atom at index `idx`.
 // The resulting slice is ordered.
-func (doc *Document) Allocate(idx int, count int, site uid.Uid) []*Position {
+func (doc *Document) Allocate(idx int, count int, site uid.Uid) []*position.Position {
 	if debug && (idx < 0 || idx >= doc.Length()) {
 		panic("index out of bounds")
 	}
@@ -101,13 +113,13 @@ func (doc *Document) Allocate(idx int, count int, site uid.Uid) []*Position {
 		panic("cannot allocate a negative number of positions")
 	}
 
-	out := make([]*Position, count)
+	out := make([]*position.Position, count)
 
 	left := doc.atoms.ByPosition(uint64(idx)).(*atom).pos
 	right := doc.atoms.ByPosition(uint64(idx + 1)).(*atom).pos
 
 	for k := range out {
-		p := new(Position)
+		p := new(position.Position)
 		doc.alloc.Call(p, left, right, site)
 		out[k] = p
 		left = p

@@ -1,7 +1,7 @@
-package lseq_test
+package position_test
 
 import (
-	. "github.com/mezis/lseq"
+	. "github.com/mezis/lseq/position"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

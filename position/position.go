@@ -1,4 +1,4 @@
-package lseq
+package position
 
 import (
 	"fmt"
@@ -76,6 +76,13 @@ func max(x, y int) int {
 	}
 	return y
 }
+
+func New() *Position {
+	return new(Position)
+}
+
+var SentinelHead = new(Position).Append(0, 0)
+var SentinelTail = new(Position).Append(maxDigitAtDepth(0), 0)
 
 // IsBefore -
 // Return true iff "pos" is before "oth" in the partial order defined by Logoot.

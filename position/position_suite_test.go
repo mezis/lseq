@@ -1,4 +1,4 @@
-package lseq_test
+package position_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestLseq(t *testing.T) {
+func TestPosition(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Lseq Suite")
+	RunSpecs(t, "Position Suite")
 }

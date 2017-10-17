@@ -1,4 +1,4 @@
-package lseq
+package position
 
 import (
 	"fmt"

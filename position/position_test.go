@@ -1,4 +1,4 @@
-package lseq_test
+package position_test
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	. "github.com/mezis/lseq"
+	. "github.com/mezis/lseq/position"
 	"github.com/mezis/lseq/uid"
 
 	. "github.com/onsi/ginkgo"

@@ -1,4 +1,4 @@
-package lseq_test
+package document_test
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/mezis/lseq"
+	. "github.com/mezis/lseq/document"
 	"github.com/mezis/lseq/uid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -17,18 +17,18 @@ var _ = Describe("lseq", func() {
 
 	Describe("NewDocument", func() {
 		It("passes", func() {
-			x := lseq.NewDocument()
+			x := NewDocument()
 			Expect(x).NotTo(Equal(nil))
 		})
 
 		It("has length zero", func() {
-			x := lseq.NewDocument()
+			x := NewDocument()
 			Expect(x.Length()).To(Equal(0))
 		})
 	})
 
 	Describe("Document.Allocate", func() {
-		x := lseq.NewDocument()
+		x := NewDocument()
 		It("returns a slice of positions", func() {
 			res := x.Allocate(0, 10, site)
 			Expect(res).NotTo(Equal(nil))
@@ -39,9 +39,9 @@ var _ = Describe("lseq", func() {
 		})
 	})
 
-	buildDocument := func() *lseq.Document {
+	buildDocument := func() *Document {
 		data := []string{"foo", "bar", "qux"}
-		out := lseq.NewDocument()
+		out := NewDocument()
 		pos := out.Allocate(0, len(data), site)
 		for k, s := range data {
 			out.Insert(pos[k], s)
@@ -72,7 +72,7 @@ var _ = Describe("lseq", func() {
 		XIt("returns false if the atom already existed", func() {})
 	})
 	Describe("Document.Delete", func() {
-		perform := func() (*lseq.Document, interface{}) {
+		perform := func() (*Document, interface{}) {
 			doc := buildDocument()
 			p, _ := doc.At(1)
 			return doc, doc.Delete(p)
@@ -104,7 +104,7 @@ var _ = Describe("lseq", func() {
 func BenchmarkDocumentRandomEdits(b *testing.B) {
 	for _, exp := range []uint{10, 11, 12, 13, 14, 15, 16} {
 		count := 1 << exp
-		doc := lseq.NewDocument()
+		doc := NewDocument()
 		for k, pos := range doc.Allocate(0, count, 0x00) {
 			str := fmt.Sprintf("atom%04d", k)
 			doc.Insert(pos, str)

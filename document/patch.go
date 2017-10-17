@@ -1,9 +1,10 @@
-package lseq
+package document
 
 import (
 	"fmt"
 	"strings"
 
+	"github.com/mezis/lseq/position"
 	"github.com/mezis/lseq/uid"
 	"github.com/pmezard/go-difflib/difflib"
 )
@@ -17,7 +18,7 @@ const (
 
 type patchItem struct {
 	op   patchOp
-	pos  *Position
+	pos  *position.Position
 	data string
 }
 
@@ -28,7 +29,7 @@ type patch struct {
 	items []patchItem
 }
 
-func (p *patch) add(op patchOp, pos *Position, data string) {
+func (p *patch) add(op patchOp, pos *position.Position, data string) {
 	p.items = append(p.items, patchItem{op, pos, data})
 }
 
